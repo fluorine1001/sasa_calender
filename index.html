@@ -5,6 +5,8 @@
     <title>사사 캘린더</title>
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/sections.css">
+    
+    <style> body { opacity: 0; transition: opacity 0.3s ease; } </style>
 </head>
 <body>
     <script type="module" src="js/auth-guard.js"></script>
@@ -47,15 +49,13 @@
     <script type="module">
         import { logoutUser } from "./js/auth-guard.js";
 
-        // localStorage에 저장된 닉네임을 가져와서 화면에 출력
         setTimeout(() => {
             const nickname = localStorage.getItem('currentUserNickname');
             if(nickname) {
                 document.getElementById('display-nickname').textContent = nickname;
             }
-        }, 500); // auth-guard가 데이터를 가져올 시간을 약간(0.5초) 기다림
+        }, 300);
 
-        // 로그아웃 버튼 클릭 이벤트 연결
         document.getElementById('logout-btn').addEventListener('click', () => {
             if(confirm("정말 로그아웃 하시겠습니까?")) {
                 logoutUser();
