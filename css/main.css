@@ -1,0 +1,24 @@
+/* 기본 레이아웃 */
+body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; height: 100%; }
+.container { display: flex; height: 100vh; }
+
+/* 사이드바 스타일 */
+.sidebar { width: 250px; background: #2c3e50; color: white; padding: 20px; }
+.sidebar ul { list-style: none; padding: 0; }
+.sidebar li { 
+    padding: 15px; cursor: pointer; border-bottom: 1px solid #34495e; 
+    transition: 0.3s;
+}
+.sidebar li:hover, .sidebar li.active { background: #3498db; }
+
+/* 컨텐츠 영역 스타일 */
+.content { flex: 1; padding: 40px; background: #f4f7f6; overflow-y: auto; }
+
+/* 탭 전환 핵심 로직 */
+.tab-content { display: none; } /* 기본적으로 모든 탭 숨김 */
+.tab-content.active { display: block; animation: fadeIn 0.5s; } /* 활성화된 탭만 표시 */
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
