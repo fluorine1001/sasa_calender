@@ -2,11 +2,19 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>사사 캘린더</title>
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/sections.css">
     
-    <style> body { opacity: 0; transition: opacity 0.3s ease; } </style>
+    <style>
+        body {
+            opacity: 0;
+            transition: opacity 0.4s ease-in-out;
+            margin: 0;
+            background-color: #f8f9fa;
+        }
+    </style>
 </head>
 <body>
     <script type="module" src="js/auth-guard.js"></script>
@@ -15,9 +23,11 @@
         <nav class="sidebar">
             <div class="logo">SASA Calendar</div>
             
-            <div class="user-profile" style="padding: 15px; border-bottom: 1px solid #ddd; margin-bottom: 10px;">
-                <p><b><span id="display-nickname">로딩 중...</span></b>님</p>
-                <button id="logout-btn" style="margin-top: 5px; padding: 5px 10px; cursor: pointer;">로그아웃</button>
+            <div class="user-profile" style="padding: 20px; border-bottom: 1px solid #eee; margin-bottom: 10px;">
+                <p style="margin: 0; font-size: 14px; color: #333;">
+                    <b><span id="display-nickname">불러오는 중...</span></b>님 반가워요!
+                </p>
+                <button id="logout-btn" style="margin-top: 10px; width: 100%; padding: 8px; background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; cursor: pointer; font-size: 12px;">로그아웃</button>
             </div>
 
             <ul>
@@ -32,7 +42,11 @@
         </nav>
 
         <main class="content">
-            <section id="dashboard" class="tab-content active"><h1>대시보드</h1></section>
+            <section id="dashboard" class="tab-content active">
+                <h1>대시보드</h1>
+                <p>환영합니다! 오늘의 일정을 확인하세요.</p>
+            </section>
+            
             <section id="calendar" class="tab-content"><h1>캘린더</h1></section>
             <section id="tasks" class="tab-content"><h1>과제/공지</h1></section>
             <section id="penalty" class="tab-content"><h1>벌점 관리</h1></section>
@@ -43,24 +57,18 @@
     </div>
 
     <script src="js/app.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/calendar.js"></script>
 
     <script type="module">
         import { logoutUser } from "./js/auth-guard.js";
 
-        setTimeout(() => {
-            const nickname = localStorage.getItem('currentUserNickname');
-            if(nickname) {
-                document.getElementById('display-nickname').textContent = nickname;
-            }
-        }, 300);
-
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            if(confirm("정말 로그아웃 하시겠습니까?")) {
-                logoutUser();
-            }
-        });
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                if(confirm("로그아웃 하시겠습니까?")) {
+                    logoutUser();
+                }
+            });
+        }
     </script>
 </body>
 </html>
