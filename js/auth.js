@@ -3,8 +3,7 @@ import {
     signInWithEmailAndPassword, 
     sendPasswordResetEmail,
     setPersistence,
-    browserLocalPersistence,
-    browserSessionPersistence
+    browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, setDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { auth, db } from "./firebase-init.js";
@@ -19,92 +18,68 @@ if(signupBtn) {
         const pwConfirm = document.getElementById('signup-pw-confirm').value;
 
         if(!email || !nickname || !pw || !pwConfirm) return alert("모든 칸을 채워주세요.");
-        if(pw !== pwConfirm) return alert("비밀번호가 서로 다릅니다. 다시 확인해주세요.");
-        if(pw.length < 6) return alert("비밀번호는 6자리 이상이어야 합니다.");
+        if(pw !== pwConfirm) return alert("비밀번호가 서로 다릅니다.");
 
         try {
             const q = query(collection(db, "users"), where("nickname", "==", nickname));
             const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                return alert("이미 사용 중인 닉네임입니다. 다른 닉네임을 입력하세요.");
-            }
+            if (!querySnapshot.empty) return alert("이미 사용 중인 닉네임입니다.");
 
             const userCredential = await createUserWithEmailAndPassword(auth, email, pw);
-            const user = userCredential.user;
-
-            await setDoc(doc(db, "users", user.uid), {
-                email: email,
-                nickname: nickname,
-                createdAt: new Date()
+            await setDoc(doc(db, "users", userCredential.user.uid), {
+                email, nickname, createdAt: new Date()
             });
 
-            alert("회원가입이 완료되었습니다! 로그인 해주세요.");
+            alert("회원가입 완료! 로그인 해주세요.");
             window.location.href = "login.html";
-
         } catch (error) {
-            console.error(error);
-            alert("회원가입 에러: " + error.message);
+            alert("회원가입 실패: " + error.message);
         }
     });
 }
 
-// [2. 로그인 로직 (로그인 유지 기능 포함)]
+// [2. 로그인 로직]
 const loginBtn = document.getElementById('login-btn');
 if(loginBtn) {
     loginBtn.addEventListener('click', async () => {
         const inputId = document.getElementById('login-id').value; 
         const pw = document.getElementById('login-pw').value;
-        const keepLogin = document.getElementById('keep-login').checked; // 체크박스 상태 확인
+        const keepLogin = document.getElementById('keep-login').checked;
         
-        let loginEmail = inputId; 
-
         if(!inputId || !pw) return alert("아이디와 비밀번호를 입력해주세요.");
 
         try {
-            // 👇 체크박스 상태를 로컬스토리지에 저장 (auth-guard.js에서 읽기 위함)
+            // 🔥 탭을 닫아도 시간이 지나기 전까진 유지되도록 Local 설정
+            await setPersistence(auth, browserLocalPersistence);
+
+            // 로그인 유지 여부와 현재 시간을 저장
             localStorage.setItem('keepLogin', keepLogin);
+            if (!keepLogin) {
+                localStorage.setItem('lastActive', Date.now());
+            }
 
-            // 👇 체크박스 여부에 따라 브라우저 닫을 때 로그아웃할지(Session) 유지할지(Local) 결정
-            const persistence = keepLogin ? browserLocalPersistence : browserSessionPersistence;
-            await setPersistence(auth, persistence);
-
-            // 닉네임 로그인 처리
+            let loginEmail = inputId;
             if (!inputId.includes('@')) {
                 const q = query(collection(db, "users"), where("nickname", "==", inputId));
                 const querySnapshot = await getDocs(q);
-                
-                if (querySnapshot.empty) {
-                    return alert("존재하지 않는 닉네임입니다.");
-                }
+                if (querySnapshot.empty) return alert("존재하지 않는 닉네임입니다.");
                 loginEmail = querySnapshot.docs[0].data().email;
             }
 
-            // 로그인 실행
             await signInWithEmailAndPassword(auth, loginEmail, pw);
             window.location.replace("index.html"); 
-
         } catch (error) {
-            console.error(error);
-            alert("로그인 실패: 아이디나 비밀번호를 확인해주세요.");
+            alert("로그인 실패: 아이디 또는 비밀번호를 확인하세요.");
         }
     });
 }
 
-// [3. 비밀번호 찾기 로직]
+// [3. 비밀번호 재설정]
 const resetBtn = document.getElementById('reset-pw-btn');
 if(resetBtn) {
     resetBtn.addEventListener('click', () => {
         const inputId = document.getElementById('login-id').value;
-        if(!inputId.includes('@')) {
-            return alert("비밀번호를 재설정하려면 가입하신 '이메일 주소'를 아이디 칸에 입력한 뒤 버튼을 눌러주세요.");
-        }
-
-        sendPasswordResetEmail(auth, inputId)
-            .then(() => {
-                alert("입력하신 이메일로 비밀번호 재설정 링크를 발송했습니다.");
-            })
-            .catch((error) => {
-                alert("에러 발생: " + error.message);
-            });
+        if(!inputId.includes('@')) return alert("이메일을 입력해주세요.");
+        sendPasswordResetEmail(auth, inputId).then(() => alert("이메일을 확인하세요."));
     });
 }
