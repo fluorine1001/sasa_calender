@@ -22,3 +22,38 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* =========================================
+   상/벌점 관리(Merit/Demerit) 스타일 추가
+========================================= */
+.card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; }
+
+.penalty-notice { background-color: #e8f0fe; border-left: 4px solid #1a73e8; }
+.penalty-notice .notice-title { margin: 0 0 8px 0; color: #1a73e8; font-size: 16px; }
+.penalty-notice .notice-content { font-size: 14px; color: #3c4043; line-height: 1.5; }
+.penalty-notice .notice-content p { margin: 0 0 4px 0; }
+
+.penalty-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+@media (max-width: 768px) { .penalty-grid { grid-template-columns: 1fr; } }
+
+.summary-card { text-align: center; padding: 30px; }
+.summary-card h2 { margin: 0 0 15px 0; font-size: 16px; color: #5f6368; }
+.total-score-display { font-size: 48px; font-weight: bold; }
+.score-positive { color: #1e8e3e; } /* 상점 초과시 초록색 */
+.score-negative { color: #d93025; } /* 벌점 초과시 빨간색 */
+
+.form-group { margin-bottom: 15px; text-align: left; }
+.form-group label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; color: #555; }
+.form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+
+.penalty-item { display: flex; justify-content: space-between; align-items: center; background: #fafafa; }
+.penalty-info { display: flex; flex-direction: column; gap: 4px; }
+.penalty-date { font-size: 11px; color: #888; }
+.penalty-reason { font-size: 14px; color: #333; }
+.penalty-points { font-size: 16px; font-weight: bold; }
+.btn-delete { background: none; border: none; color: #aaa; cursor: pointer; padding: 4px; border-radius: 4px; font-size: 14px; }
+.btn-delete:hover { background: #eee; color: #d93025; }
+
+.penalty-rules { background-color: #fce8e6; border: 1px solid #fad2cf; }
+.penalty-rules h3 { color: #c5221f; margin-top: 0; }
+.rule-list { margin: 0; padding-left: 20px; font-size: 14px; color: #3c4043; line-height: 1.8; }
