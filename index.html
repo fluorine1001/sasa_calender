@@ -174,7 +174,72 @@
                 <div id="tasks-list"></div>
             </section>
 
-            <section id="penalty" class="tab-content"><h1>벌점 관리</h1></section>
+            <section id="penalty" class="tab-content">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                    <h1 style="margin: 0;">상/벌점 관리</h1>
+                </div>
+
+                <div class="card penalty-notice">
+                    <h3 class="notice-title">📢 공지사항: 상/벌점 시스템 이용 안내</h3>
+                    <div class="notice-content">
+                        <p>이곳은 본인의 상점과 벌점을 스스로 기록하고 관리하는 공간입니다.</p>
+                        <p>허위 기재 시 불이익이 발생할 수 있으니, 선생님이 부여하신 점수를 정확히 기록해 주세요.</p>
+                    </div>
+                </div>
+
+                <div class="penalty-grid">
+                    <div class="penalty-left">
+                        <div class="card summary-card">
+                            <h2>나의 누적 점수</h2>
+                            <div class="total-score-display">
+                                <span id="total-score">0</span> 점
+                            </div>
+                            <p id="score-status-text" style="color: #666; font-size: 14px; margin-top: 10px;">기록이 없습니다.</p>
+                        </div>
+
+                        <div class="card">
+                            <h3>새 내역 추가</h3>
+                            <form id="penalty-form">
+                                <div class="form-group">
+                                    <label for="point-type">구분 (필수)</label>
+                                    <select id="point-type" required>
+                                        <option value="merit">상점 (+)</option>
+                                        <option value="demerit">벌점 (-)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="point-value">점수 (필수)</label>
+                                    <input type="number" id="point-value" min="1" required placeholder="예: 3">
+                                </div>
+                                <div class="form-group">
+                                    <label for="point-reason">사유 (선택)</label>
+                                    <input type="text" id="point-reason" placeholder="예: 아침 청소 당번 우수">
+                                </div>
+                                <button type="submit" class="cl-btn-primary" style="width: 100%; margin-top: 10px;">기록 추가하기</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="penalty-right">
+                        <div class="card">
+                            <h3>기록 내역</h3>
+                            <div id="penalty-list" class="cl-list" style="max-height: 300px; overflow-y: auto;">
+                                </div>
+                        </div>
+
+                        <div class="card penalty-rules">
+                            <h3>⚠️ 벌점 누적에 따른 징계 기준</h3>
+                            <ul class="rule-list">
+                                <li><strong>-5점:</strong> 사감 선생님 면담 및 1차 경고</li>
+                                <li><strong>-10점:</strong> 부모님 연락 및 2차 경고</li>
+                                <li><strong>-15점:</strong> 교내 봉사 활동 5시간</li>
+                                <li><strong>-20점:</strong> 기숙사 1주일 퇴사 조치</li>
+                                <li><strong>-30점:</strong> 기숙사 영구 퇴사 조치</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
             <section id="timeplan" class="tab-content"><h1>시간 계획</h1></section>
             <section id="eval" class="tab-content"><h1>과목 평가 계획</h1></section>
             
@@ -234,5 +299,6 @@
     </script>
 
     <script type="module" src="js/classroom.js"></script>
+    <script type="module" src="js/merit.js"></script>
 </body>
 </html>
