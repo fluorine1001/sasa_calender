@@ -146,3 +146,278 @@ async function unlinkAccount() {
         alert("삭제 처리 중 오류가 발생했습니다.");
     }
 }
+// ================================================================
+// [토큰 관리] 유효성 확인 및 자동 갱신
+// ================================================================
+
+async function getValidToken() {
+    const docSnap = await getDoc(doc(db, `users/${uid}/settings/classroom`));
+    if (!docSnap.exists()) throw new Error("NOT_LINKED");
+
+    const { access_token, token_expiry } = docSnap.data();
+
+    // 토큰이 유효하면 그대로 반환
+    if (access_token && token_expiry && Date.now() < token_expiry) {
+        return access_token;
+    }
+    // 만료됐으면 팝업 없이 자동 갱신
+    return await refreshTokenSilently();
+}
+
+function refreshTokenSilently() {
+    return new Promise((resolve, reject) => {
+        if (!tokenClient) return reject(new Error("tokenClient 미초기화"));
+        const originalCallback = tokenClient.callback;
+        tokenClient.callback = async (response) => {
+            tokenClient.callback = originalCallback;
+            if (response.error) {
+                reject(new Error(response.error));
+            } else {
+                await setDoc(doc(db, `users/${uid}/settings/classroom`), {
+                    access_token: response.access_token,
+                    token_expiry: Date.now() + 55 * 60 * 1000,
+                }, { merge: true });
+                resolve(response.access_token);
+            }
+        };
+        tokenClient.requestAccessToken({ prompt: '' });
+    });
+}
+
+
+// ================================================================
+// [과제/공지 탭] 가져오기 플로우
+// ================================================================
+
+async function onImportBtnClick() {
+    openModal();
+    showLoading("Google 계정 확인 중...");
+    let token;
+    try {
+        token = await getValidToken();
+    } catch (e) {
+        if (e.message === "NOT_LINKED") {
+            showNotLinkedMessage(); return;
+        }
+        // 자동 갱신 실패 시 재동의 팝업
+        showLoading("재인증이 필요합니다. 팝업을 확인해주세요...");
+        try {
+            token = await new Promise((resolve, reject) => {
+                const original = tokenClient.callback;
+                tokenClient.callback = async (r) => {
+                    tokenClient.callback = original;
+                    if (r.error) reject(new Error(r.error));
+                    else { await handleAuthSuccess(r); resolve(r.access_token); }
+                };
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            });
+        } catch {
+            showError("Google 인증에 실패했습니다. 설정 탭에서 다시 연동해주세요."); return;
+        }
+    }
+    showLoading("클래스룸 목록 불러오는 중...");
+    try {
+        const courses = await fetchCourses(token);
+        renderCourseList(courses, token);
+    } catch (e) {
+        console.error(e);
+        showError("클래스룸 목록을 불러오지 못했습니다.");
+    }
+}
+
+
+// ================================================================
+// [Classroom API 호출]
+// ================================================================
+
+async function fetchCourses(token) {
+    const res = await fetch(
+        "https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE",
+        { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error(`courses API 오류: ${res.status}`);
+    return (await res.json()).courses || [];
+}
+
+async function fetchCourseWork(token, courseId) {
+    const res = await fetch(
+        `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork?orderBy=dueDate%20desc`,
+        { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error(`courseWork API 오류: ${res.status}`);
+    return (await res.json()).courseWork || [];
+}
+
+function parseDueDate(dueDate, dueTime) {
+    if (!dueDate) return null;
+    const { year, month, day } = dueDate;
+    return new Date(Date.UTC(year, month - 1, day, dueTime?.hours ?? 23, dueTime?.minutes ?? 59));
+}
+
+
+// ================================================================
+// [Firestore 저장]
+// ================================================================
+
+async function saveTaskToFirestore(work) {
+    const { addDoc, collection, Timestamp } = await import(
+        "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js"
+    );
+    await addDoc(collection(db, "users", uid, "tasks"), {
+        title:       work.title,
+        dueDate:     work.dueDate ? Timestamp.fromDate(work.dueDate) : null,
+        isCompleted: false,
+        memo:        work.description || "",
+        source:      "classroom",
+        courseId:    work.courseId,
+        classroomId: work.id
+    });
+}
+
+
+// ================================================================
+// [모달 UI]
+// ================================================================
+
+function openModal()  { document.getElementById('classroom-modal').style.display = 'flex'; }
+function closeModal() {
+    document.getElementById('classroom-modal').style.display = 'none';
+    document.getElementById('classroom-modal-body').innerHTML = '';
+}
+
+function showLoading(msg = "불러오는 중...") {
+    document.getElementById('classroom-modal-body').innerHTML = `
+        <div style="text-align:center;padding:40px 0;">
+            <div class="cl-spinner"></div>
+            <p style="margin-top:16px;color:#555;">${msg}</p>
+        </div>`;
+}
+
+function showError(msg) {
+    document.getElementById('classroom-modal-body').innerHTML = `
+        <div style="text-align:center;padding:30px 0;">
+            <p style="color:#e74c3c;font-size:15px;">⚠️ ${msg}</p>
+            <button class="cl-btn-back" id="cl-err-close" style="margin-top:16px;">닫기</button>
+        </div>`;
+    document.getElementById('cl-err-close').addEventListener('click', closeModal);
+}
+
+function showNotLinkedMessage() {
+    document.getElementById('classroom-modal-body').innerHTML = `
+        <div style="text-align:center;padding:30px 0;">
+            <p style="font-size:15px;color:#555;">Google 클래스룸이 연동되지 않았습니다.</p>
+            <p style="font-size:13px;color:#888;">설정 탭에서 먼저 계정을 연동해주세요.</p>
+            <button class="cl-btn-back" id="cl-go-settings" style="margin-top:16px;">설정으로 이동</button>
+        </div>`;
+    document.getElementById('cl-go-settings').addEventListener('click', () => {
+        closeModal();
+        document.querySelector('[data-target="settings"]')?.click();
+    });
+}
+
+function renderCourseList(courses, token) {
+    if (courses.length === 0) {
+        document.getElementById('classroom-modal-body').innerHTML =
+            `<p style="text-align:center;padding:30px;color:#888;">활성화된 클래스룸이 없습니다.</p>`;
+        return;
+    }
+    document.getElementById('classroom-modal-body').innerHTML = `
+        <p style="margin:0 0 14px;font-size:14px;color:#555;">가져올 과제가 있는 수업을 선택하세요.</p>
+        <div class="cl-list">
+            ${courses.map(c => `
+                <div class="cl-list-item" data-id="${c.id}" data-name="${escapeHtml(c.name)}">
+                    <span class="cl-course-name">${escapeHtml(c.name)}</span>
+                    <span class="cl-arrow">›</span>
+                </div>`).join('')}
+        </div>`;
+    document.querySelectorAll('.cl-list-item').forEach(item => {
+        item.addEventListener('click', () => showCourseWork(item.dataset.id, item.dataset.name, token));
+    });
+}
+
+async function showCourseWork(courseId, courseName, token) {
+    showLoading(`${courseName} 과제 불러오는 중...`);
+    try {
+        const validToken = await getValidToken().catch(() => token);
+        const courseWork = await fetchCourseWork(validToken, courseId);
+
+        if (courseWork.length === 0) {
+            document.getElementById('classroom-modal-body').innerHTML = `
+                <button class="cl-btn-back" id="cl-back">← 수업 목록으로</button>
+                <p style="text-align:center;padding:30px;color:#888;">등록된 과제가 없습니다.</p>`;
+            document.getElementById('cl-back').addEventListener('click', async () => {
+                showLoading("수업 목록 불러오는 중...");
+                const t = await getValidToken().catch(() => token);
+                renderCourseList(await fetchCourses(t), t);
+            });
+            return;
+        }
+
+        document.getElementById('classroom-modal-body').innerHTML = `
+            <button class="cl-btn-back" id="cl-back">← 수업 목록으로</button>
+            <p style="margin:12px 0 14px;font-size:14px;color:#555;">
+                <strong>${escapeHtml(courseName)}</strong> — 가져올 과제를 선택하세요.
+            </p>
+            <div class="cl-list">
+                ${courseWork.map(w => {
+                    const due = parseDueDate(w.dueDate, w.dueTime);
+                    const dueStr = due
+                        ? due.toLocaleDateString('ko-KR', { month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' })
+                        : '기한 없음';
+                    return `
+                    <label class="cl-list-item cl-checkable">
+                        <input type="checkbox" class="cl-checkbox" value="${w.id}">
+                        <div class="cl-work-info">
+                            <span class="cl-work-title">${escapeHtml(w.title)}</span>
+                            <span class="cl-work-due">📅 ${dueStr}</span>
+                        </div>
+                    </label>`;
+                }).join('')}
+            </div>
+            <button class="cl-btn-primary" id="cl-import-confirm" style="width:100%;margin-top:16px;">
+                선택한 과제 가져오기
+            </button>`;
+
+        document.getElementById('cl-back').addEventListener('click', async () => {
+            showLoading("수업 목록 불러오는 중...");
+            const t = await getValidToken().catch(() => token);
+            renderCourseList(await fetchCourses(t), t);
+        });
+
+        document.getElementById('cl-import-confirm').addEventListener('click', async () => {
+            const checked = [...document.querySelectorAll('.cl-checkbox:checked')];
+            if (checked.length === 0) return alert("과제를 1개 이상 선택해주세요.");
+            const selectedIds = new Set(checked.map(cb => cb.value));
+            const selected = courseWork.filter(w => selectedIds.has(w.id));
+
+            showLoading("과제를 저장하는 중...");
+            let ok = 0, fail = 0;
+            for (const w of selected) {
+                try {
+                    await saveTaskToFirestore({
+                        id: w.id, title: w.title,
+                        dueDate: parseDueDate(w.dueDate, w.dueTime),
+                        description: w.description, courseId: w.courseId
+                    });
+                    ok++;
+                } catch (e) {
+                    console.error("저장 실패:", w.title, e); fail++;
+                }
+            }
+            document.getElementById('classroom-modal-body').innerHTML = `
+                <div style="text-align:center;padding:30px 0;">
+                    <p style="font-size:22px;">✅</p>
+                    <p style="font-size:16px;font-weight:bold;">${ok}개 과제를 저장했습니다.</p>
+                    ${fail > 0 ? `<p style="color:#e74c3c;font-size:13px;">${fail}개는 저장에 실패했습니다.</p>` : ''}
+                    <button class="cl-btn-primary" id="cl-done" style="margin-top:20px;">닫기</button>
+                </div>`;
+            document.getElementById('cl-done').addEventListener('click', closeModal);
+        });
+    } catch (e) {
+        console.error(e); showError("과제 목록을 불러오지 못했습니다.");
+    }
+}
+
+function escapeHtml(str = '') {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
