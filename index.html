@@ -15,67 +15,7 @@
             background-color: #f8f9fa;
         }
 
-        /* ── 상태 뱃지 ── */
-        .status-badge {
-            display: inline-block;
-            padding: 3px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-left: 8px;
-        }
-        .status-linked   { background: #d4edda; color: #155724; }
-        .status-unlinked { background: #f8d7da; color: #721c24; }
-
-        /* ── 클래스룸 버튼 ── */
-        .cl-btn-primary {
-            background: #3498db;
-            color: #fff;
-            border: none;
-            padding: 10px 18px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background 0.2s;
-        }
-        .cl-btn-primary:hover { background: #2980b9; }
-
-        .cl-btn-secondary {
-            background: #f1f2f6;
-            color: #555;
-            border: 1px solid #ddd;
-            padding: 10px 18px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-        .cl-btn-secondary:hover { background: #e0e0e0; }
-
-        .cl-btn-danger {
-            background: #fff;
-            color: #e74c3c;
-            border: 1px solid #e74c3c;
-            padding: 10px 18px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-        .cl-btn-danger:hover { background: #e74c3c; color: #fff; }
-
-        .cl-btn-back {
-            background: none;
-            border: none;
-            color: #3498db;
-            font-size: 13px;
-            cursor: pointer;
-            padding: 0;
-        }
-        .cl-btn-back:hover { text-decoration: underline; }
-
-        /* ── 모달 ── */
+        /* ── 클래스룸 모달 ── */
         #classroom-modal {
             display: none;
             position: fixed;
@@ -102,16 +42,27 @@
             justify-content: space-between;
             padding: 18px 24px;
             border-bottom: 1px solid #eee;
-            flex-shrink: 0;
         }
-        .cl-modal-header h3 { margin: 0; font-size: 16px; color: #2c3e50; }
+        .cl-modal-header h3 {
+            margin: 0;
+            font-size: 16px;
+            color: #2c3e50;
+        }
         .cl-modal-close {
-            background: none; border: none;
-            font-size: 20px; cursor: pointer; color: #888; line-height: 1;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #888;
+            line-height: 1;
         }
-        #classroom-modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        #classroom-modal-body {
+            padding: 20px 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
 
-        /* ── 모달 내부 컴포넌트 ── */
+        /* ── 모달 내부 공통 컴포넌트 ── */
         .cl-spinner {
             width: 36px; height: 36px;
             border: 4px solid #e0e0e0;
@@ -131,34 +82,56 @@
             border: 1px solid #e0e0e0;
             border-radius: 8px;
             cursor: pointer;
-            transition: background 0.15s, border-color 0.15s;
+            transition: background 0.15s;
         }
         .cl-list-item:hover { background: #f0f7ff; border-color: #3498db; }
-        .cl-checkable { justify-content: flex-start; gap: 12px; }
-        .cl-checkbox  { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
-        .cl-item-name { font-size: 14px; font-weight: 500; color: #2c3e50; }
-        .cl-arrow     { font-size: 18px; color: #aaa; }
+        .cl-checkable { justify-content: flex-start; gap: 12px; cursor: pointer; }
+        .cl-checkbox { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+        .cl-course-name { font-size: 14px; font-weight: 500; color: #2c3e50; }
+        .cl-arrow { font-size: 18px; color: #aaa; }
         .cl-work-info { display: flex; flex-direction: column; gap: 3px; }
         .cl-work-title { font-size: 14px; font-weight: 500; color: #2c3e50; }
-        .cl-work-due   { font-size: 12px; color: #888; }
+        .cl-work-due { font-size: 12px; color: #888; }
 
-        /* ── 설정 카드 ── */
-        .settings-card {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            padding: 24px;
-            max-width: 500px;
+        .cl-btn-primary {
+            background: #3498db;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
         }
-        .settings-card h3 { margin: 0 0 6px; font-size: 16px; color: #2c3e50; }
-        .settings-card p  { margin: 0 0 16px; font-size: 13px; color: #888; }
-        .settings-btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .cl-btn-primary:hover { background: #2980b9; }
+        .cl-btn-back {
+            background: none;
+            border: none;
+            color: #3498db;
+            font-size: 13px;
+            cursor: pointer;
+            padding: 0;
+            margin-bottom: 4px;
+        }
+        .cl-btn-back:hover { text-decoration: underline; }
+
+        /* 상태 배지 스타일 */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .status-unlinked { background-color: #fce8e6; color: #d93025; }
+        .status-linked { background-color: #e6f4ea; color: #1e8e3e; }
     </style>
 </head>
 <body>
     <script type="module" src="js/auth-guard.js"></script>
 
-    <!-- ★ Google Identity Services (GIS) — 클래스룸 OAuth에 필요 -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <div class="container">
@@ -191,7 +164,6 @@
 
             <section id="calendar" class="tab-content"><h1>캘린더</h1></section>
 
-            <!-- ★ 과제/공지 탭 — 클래스룸 가져오기 버튼 추가 -->
             <section id="tasks" class="tab-content">
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;">
                     <h1 style="margin:0;">과제/공지</h1>
@@ -205,30 +177,37 @@
             <section id="penalty" class="tab-content"><h1>벌점 관리</h1></section>
             <section id="timeplan" class="tab-content"><h1>시간 계획</h1></section>
             <section id="eval" class="tab-content"><h1>과목 평가 계획</h1></section>
-
-            <!-- ★ 설정 탭 — 클래스룸 연동 카드 추가 -->
+            
             <section id="settings" class="tab-content">
                 <h1>설정</h1>
-                <div class="settings-card">
-                    <h3>
-                        Google 클래스룸 연동
-                        <span id="link-status" class="status-badge status-unlinked">미연동</span>
-                    </h3>
-                    <p id="linked-email-display"></p>
-                    <div class="settings-btn-row">
-                        <button id="btn-link-classroom" class="cl-btn-primary">클래스룸 연동하기</button>
-                        <button id="btn-unlink-classroom" class="cl-btn-danger" style="display:none;">연동 해제</button>
+                
+                <div class="card" style="background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 20px;">
+                    <div class="card-header" style="border-bottom: 1px solid #eee; margin-bottom: 20px; padding-bottom: 12px;">
+                        <h3 style="margin: 0; color: #2c3e50;">외부 서비스 연동</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="classroom-status-container" style="margin-bottom: 20px;">
+                            <span id="link-status" class="status-badge status-unlinked">미연동</span>
+                            <h4 style="margin: 0 0 8px 0; font-size: 16px;">Google Classroom</h4>
+                            <p id="linked-email-display" style="font-size: 14px; color: #666; margin: 0; line-height: 1.6;">
+                                클래스룸의 과제 및 공지사항 데이터를 자동으로 불러오기 위해 구글 계정을 연동합니다.
+                            </p>
+                        </div>
+                        
+                        <div class="action-buttons">
+                            <button id="btn-link-classroom" class="cl-btn-primary" style="padding: 10px 18px;">구글 계정 연결하기</button>
+                            <button id="btn-unlink-classroom" style="display: none; background-color: #f8f9fa; border: 1px solid #ddd; color: #555; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; margin-left: 10px;">연결 해제</button>
+                        </div>
                     </div>
                 </div>
             </section>
         </main>
     </div>
 
-    <!-- ★ 클래스룸 과제 선택 모달 -->
     <div id="classroom-modal">
         <div class="cl-modal-box">
             <div class="cl-modal-header">
-                <h3>Google Classroom 과제 가져오기</h3>
+                <h3>📚 Google Classroom 과제 가져오기</h3>
                 <button class="cl-modal-close" id="cl-modal-close-btn">✕</button>
             </div>
             <div id="classroom-modal-body"></div>
@@ -239,12 +218,21 @@
 
     <script type="module">
         import { logoutUser } from "./js/auth-guard.js";
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            if (confirm("로그아웃 하시겠습니까?")) logoutUser();
+
+        // 로그아웃 버튼
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                if(confirm("로그아웃 하시겠습니까?")) logoutUser();
+            });
+        }
+
+        // 모달 X 버튼
+        document.getElementById('cl-modal-close-btn').addEventListener('click', () => {
+            document.getElementById('classroom-modal').style.display = 'none';
         });
     </script>
 
-    <!-- ★ classroom.js 로드 -->
     <script type="module" src="js/classroom.js"></script>
 </body>
 </html>
