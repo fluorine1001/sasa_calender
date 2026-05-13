@@ -1,6 +1,6 @@
 // js/classroom.js
 import { db } from './firebase-init.js'; // 공용 DB 객체 사용
-import { doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.x/firebase-firestore.js";
+import { doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 // 가이드 규칙: localStorage에서 UID 확보
 const uid = localStorage.getItem('currentUserUid');
