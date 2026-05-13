@@ -59,6 +59,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (unlinkBtn) {
         unlinkBtn.onclick = unlinkAccount;
     }
+    const importBtn = document.getElementById('classroom-import-btn');
+    if (importBtn) importBtn.addEventListener('click', onImportBtnClick);
 });
 
 // 연동 상태에 따라 화면을 갱신하는 함수
@@ -121,6 +123,7 @@ async function handleAuthSuccess(tokenResponse) {
         await setDoc(doc(db, `users/${uid}/settings/classroom`), {
             email: userEmail,
             access_token: tokenResponse.access_token,
+            token_expiry: Date.now() + 55 * 60 * 1000,
             linkedAt: new Date().toISOString()
         });
 
