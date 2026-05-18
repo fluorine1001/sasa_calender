@@ -1,148 +1,168 @@
 // js/classroom.js
 import { db } from './firebase-init.js';
 import { doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
-// 가이드 보안 규칙: localStorage에서 UID 확보
-const uid = localStorage.getItem('currentUserUid');
-// ⚠️ 본인의 실제 구글 클라이언트 ID로 반드시 변경하세요!
-const CLIENT_ID = '779057546808-59940trcdab7uouqn1ro0bi8bf85cost.apps.googleusercontent.com'; 
+let currentUid = null;
+let tokenClient = null;
 
-let tokenClient;
+// ⚠️ [필수 확인] 본인의 Google Cloud Console에서 발급받은 클라이언트 ID를 입력하세요!
+const GOOGLE_CLIENT_ID = "779057546808-59940trcdab7uouqn1ro0bi8bf85cost.apps.googleusercontent.com"; 
+const SCOPES = "https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.coursework.me.readonly";
 
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log("[Classroom] 페이지 로드됨. UID:", uid);
-    if (!uid) {
-        console.warn("[Classroom] UID가 없습니다. 로그인이 필요합니다.");
-        return;
-    }
-
-    // 1. 초기 UI 상태 업데이트
-    await updateClassroomUI();
-
-    // 2. Google OAuth 초기화
-    if (typeof google !== 'undefined') {
-        try {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/classroom.coursework.me.readonly https://www.googleapis.com/auth/classroom.announcements.readonly https://www.googleapis.com/auth/userinfo.email',
-                callback: async (response) => {
-                    if (response.error) {
-                        console.error("[Classroom] 구글 인증 오류:", response.error);
-                        return;
-                    }
-                    await handleAuthSuccess(response);
-                },
-            });
-            console.log("[Classroom] Google Token Client 초기화 완료");
-        } catch (e) {
-            console.error("[Classroom] GIS 초기화 중 예외 발생:", e);
-        }
-    } else {
-        console.warn("[Classroom] 구글 라이브러리(google)가 로드되지 않았습니다. index.html의 스크립트 태그를 확인하세요.");
-    }
-
-    // 3. 이벤트 리스너 연결
+document.addEventListener('DOMContentLoaded', () => {
+    // 버튼 요소 가져오기
     const linkBtn = document.getElementById('btn-link-classroom');
     const unlinkBtn = document.getElementById('btn-unlink-classroom');
 
-    if (linkBtn) {
-        linkBtn.onclick = () => {
-            console.log("[Classroom] 연동 버튼 클릭됨");
-            if (tokenClient) {
-                tokenClient.requestAccessToken();
-            } else {
-                alert("구글 라이브러리를 불러오는 중입니다. 잠시만 기다려주세요.");
-            }
-        };
-    }
+    // 클릭 이벤트 바인딩
+    if (linkBtn) linkBtn.addEventListener('click', handleLinkClassroom);
+    if (unlinkBtn) unlinkBtn.addEventListener('click', handleUnlinkClassroom);
 
-    if (unlinkBtn) {
-        unlinkBtn.onclick = unlinkAccount;
-    }
+    // Firebase 로그인 상태 확인 후 구글 서비스 초기화 수행
+    const auth = getAuth();
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            currentUid = user.uid;
+            
+            // 1. 구글 인증 클라이언트 초기화
+            initGoogleAuth();
+            
+            // 2. 현재 이 유저가 이미 클래스룸 연동을 완료했는지 DB 검사 및 UI 업데이트
+            await checkLinkStatus();
+        } else {
+            currentUid = null;
+            updateUI(false, null);
+        }
+    });
 });
 
-// 연동 상태에 따라 화면을 갱신하는 함수
-async function updateClassroomUI() {
-    console.log("[Classroom] UI 업데이트 시작...");
-    try {
-        const docRef = doc(db, `users/${uid}/settings/classroom`);
-        const docSnap = await getDoc(docRef);
+// 구글 Identity Services (GSI) 팝업 객체 초기화 함수
+function initGoogleAuth() {
+    // html에 명시한 구글 스크립트가 아직 완전히 로드되지 않은 경우를 대비한 안전장치
+    if (typeof google === 'undefined') {
+        setTimeout(initGoogleAuth, 300);
+        return;
+    }
 
-        const statusBadge = document.getElementById('link-status');
-        const emailDisplay = document.getElementById('linked-email-display');
-        const linkBtn = document.getElementById('btn-link-classroom');
-        const unlinkBtn = document.getElementById('btn-unlink-classroom');
-
-        // 요소 존재 여부 체크 (에러 방지)
-        if (!statusBadge || !emailDisplay || !linkBtn) {
-            console.error("[Classroom] 필수 UI 요소를 찾을 수 없습니다. index.html에 설정 UI가 제대로 있는지 확인하세요.");
-            return;
-        }
-
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            console.log("[Classroom] 연동 데이터 발견:", data);
-
-            // 연동됨 상태 UI 적용
-            statusBadge.innerText = "연동됨";
-            statusBadge.className = "status-badge status-linked"; 
-            
-            const displayEmail = data.email || "알 수 없는 계정";
-            emailDisplay.innerHTML = `<strong>연동된 계정:</strong> ${displayEmail}<br><span style="font-size:12px; color:#888;">클래스룸 데이터를 가져올 준비가 되었습니다.</span>`;
-            
-            linkBtn.innerText = "다른 계정으로 변경";
-            if (unlinkBtn) unlinkBtn.style.display = "inline-block";
-        } else {
-            console.log("[Classroom] 연동 데이터 없음 (미연동 상태)");
-            // 미연동 상태 UI 적용
-            statusBadge.innerText = "미연동";
-            statusBadge.className = "status-badge status-unlinked";
-            emailDisplay.innerText = "클래스룸의 과제 및 공지사항 데이터를 자동으로 불러오기 위해 구글 계정을 연동합니다.";
-            linkBtn.innerText = "구글 계정 연결하기";
-            if (unlinkBtn) unlinkBtn.style.display = "none";
-        }
-    } catch (error) {
-        console.error("[Classroom] UI 업데이트 중 오류 발생:", error);
+    if (!tokenClient) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: SCOPES,
+            callback: async (tokenResponse) => {
+                if (tokenResponse.error !== undefined) {
+                    console.error("구글 인증 에러:", tokenResponse);
+                    return;
+                }
+                // 인증 성공 시 토큰 저장
+                await saveTokenToFirestore(tokenResponse);
+            },
+        });
     }
 }
 
-// 인증 성공 시: 실제 이메일 획득 및 Firestore 저장
-async function handleAuthSuccess(tokenResponse) {
-    console.log("[Classroom] 인증 성공. 정보를 저장합니다...");
-    try {
-        // 구글 UserInfo API를 호출하여 실제 이메일 주소를 가져옴
-        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { 'Authorization': `Bearer ${tokenResponse.access_token}` }
-        });
-        const userInfo = await userInfoRes.json();
-        const userEmail = userInfo.email;
+// [연동하기] 버튼 클릭 시 실행
+function handleLinkClassroom() {
+    if (!tokenClient) {
+        alert("구글 인증 시스템을 초기화 중입니다. 잠시 후 다시 시도해주세요.");
+        initGoogleAuth();
+        return;
+    }
+    // 구글 계정 선택 및 권한 동의 팝업창 실행
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+}
 
-        // Firestore에 계정 연동 정보 저장 (임의의 세션에서도 유지됨)
-        await setDoc(doc(db, `users/${uid}/settings/classroom`), {
-            email: userEmail,
+// 구글로부터 받은 토큰을 Firestore에 세팅
+async function saveTokenToFirestore(tokenResponse) {
+    if (!currentUid) return;
+
+    try {
+        const tokenRef = doc(db, `users/${currentUid}/tokens/classroom`);
+        
+        // 토큰 정보 및 만료 시간 계산하여 저장
+        await setDoc(tokenRef, {
             access_token: tokenResponse.access_token,
+            expires_at: Date.now() + (tokenResponse.expires_in * 1000),
             linkedAt: new Date().toISOString()
         });
 
-        console.log("[Classroom] 저장 완료:", userEmail);
-        alert(`${userEmail} 계정과 성공적으로 연동되었습니다.`);
-        await updateClassroomUI(); // 새로고침 없이 UI 즉시 갱신
+        alert("구글 클래스룸 연동이 완료되었습니다!");
+        await checkLinkStatus(); // UI 갱신
     } catch (error) {
-        console.error("[Classroom] 데이터 저장 중 오류:", error);
-        alert("계정 정보를 저장하는 중 오류가 발생했습니다.");
+        console.error("토큰 저장 실패:", error);
+        alert("연동 정보를 저장하는 중 오류가 발생했습니다.");
     }
 }
 
-// 연동 해제 (데이터 삭제)
-async function unlinkAccount() {
-    if (!confirm("연동을 해제하시겠습니까? 더 이상 클래스룸 데이터를 불러올 수 없습니다.")) return;
+// Firestore를 조회하여 연동 상태 확인
+async function checkLinkStatus() {
+    if (!currentUid) return;
+
     try {
-        await deleteDoc(doc(db, `users/${uid}/settings/classroom`));
-        console.log("[Classroom] 연동 해제 완료");
-        alert("연동 정보가 완전히 삭제되었습니다.");
-        await updateClassroomUI(); // UI 초기 상태로 복구
+        const tokenRef = doc(db, `users/${currentUid}/tokens/classroom`);
+        const docSnap = await getDoc(tokenRef);
+
+        if (docSnap.exists()) {
+            // 연동 기록이 존재함
+            updateUI(true);
+        } else {
+            // 연동 기록이 없음
+            updateUI(false);
+        }
     } catch (error) {
-        console.error("[Classroom] 연동 해제 중 오류:", error);
-        alert("삭제 처리 중 오류가 발생했습니다.");
+        console.error("연동 상태 확인 실패:", error);
+        updateUI(false);
+    }
+}
+
+// [연결 해제] 버튼 클릭 시 실행
+async function handleUnlinkClassroom() {
+    if (!currentUid) return;
+
+    if (confirm("구글 클래스룸 연동을 해제하시겠습니까? 사사 캘린더에서 더 이상 과제를 불러올 수 없습니다.")) {
+        try {
+            const tokenRef = doc(db, `users/${currentUid}/tokens/classroom`);
+            await deleteDoc(tokenRef);
+            
+            alert("연동이 해제되었습니다.");
+            updateUI(false);
+        } catch (error) {
+            console.error("연동 해제 실패:", error);
+            alert("연동 해제 중 오류가 발생했습니다.");
+        }
+    }
+}
+
+// js/classroom.js 맨 아래에 있는 updateUI 함수를 이것으로 교체
+function updateUI(isLinked) {
+    const linkStatus = document.getElementById('link-status');
+    const linkedEmailDisplay = document.getElementById('linked-email-display');
+    const linkBtn = document.getElementById('btn-link-classroom');
+    const unlinkBtn = document.getElementById('btn-unlink-classroom');
+
+    if (!linkStatus || !linkBtn || !unlinkBtn) return;
+
+    // 만약 로그인이 안 되어 있어서 currentUid가 없다면 무조건 미연동 레이아웃으로 복귀
+    if (!currentUid) {
+        linkStatus.innerText = "미연동";
+        linkStatus.className = "status-badge status-unlinked";
+        if (linkedEmailDisplay) linkedEmailDisplay.innerText = "로그인이 필요합니다.";
+        linkBtn.style.display = "inline-block";
+        unlinkBtn.style.display = "none";
+        return;
+    }
+
+    if (isLinked) {
+        linkStatus.innerText = "연동됨";
+        linkStatus.className = "status-badge status-linked";
+        if (linkedEmailDisplay) linkedEmailDisplay.innerText = "구글 클래스룸과 성공적으로 연결되어 있습니다. 과제 탭에서 데이터를 가져올 수 있습니다.";
+        linkBtn.style.display = "none";
+        unlinkBtn.style.display = "inline-block"; // ◀ 오타 수정 완료! (.style 한 번만)
+    } else {
+        linkStatus.innerText = "미연동";
+        linkStatus.className = "status-badge status-unlinked";
+        if (linkedEmailDisplay) linkedEmailDisplay.innerText = "클래스룸의 과제 및 공지사항 데이터를 자동으로 불러오기 위해 구글 계정을 연동합니다.";
+        linkBtn.style.display = "inline-block";
+        unlinkBtn.style.display = "none";
     }
 }
