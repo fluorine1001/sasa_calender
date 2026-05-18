@@ -1,24 +1,42 @@
 // js/merit.js
 import { db } from './firebase-init.js';
 import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+// ▼ Firebase 인증 모듈 추가 ▼
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
-const uid = localStorage.getItem('currentUserUid');
+let currentUid = null;
+let unsubscribeSnapshot = null; // 기존 데이터 리스너를 해제하기 위한 변수
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!uid) return;
-
     const form = document.getElementById('penalty-form');
     if (form) {
         form.addEventListener('submit', handleAddPenalty);
     }
 
-    // 데이터베이스에서 내역을 실시간으로 불러오기
-    loadPenaltyData();
+    // ▼ 변경된 부분: Firebase 로그인 상태가 확인된 '후'에 데이터를 불러옵니다 ▼
+    const auth = getAuth();
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUid = user.uid; // 정확한 유저 고유 ID 획득
+            loadPenaltyData();     // 유저 확인 후 내역 불러오기
+        } else {
+            currentUid = null;
+            // 로그아웃 상태면 실시간 리스너 해제 및 화면 초기화
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
+            document.getElementById('penalty-list').innerHTML = '';
+            document.getElementById('total-score').innerText = '0';
+        }
+    });
 });
 
 // 상벌점 데이터 추가 함수
 async function handleAddPenalty(e) {
     e.preventDefault();
+
+    if (!currentUid) {
+        alert("로그인 정보가 확인되지 않았습니다. 다시 로그인해주세요.");
+        return;
+    }
 
     const type = document.getElementById('point-type').value;
     const value = parseInt(document.getElementById('point-value').value, 10);
@@ -33,8 +51,8 @@ async function handleAddPenalty(e) {
     const finalScore = type === 'demerit' ? -value : value;
 
     try {
-        // 컬렉션 이름을 merits로 관리
-        const meritsRef = collection(db, `users/${uid}/merits`);
+        // uid 대신 currentUid 사용
+        const meritsRef = collection(db, `users/${currentUid}/merits`);
         await addDoc(meritsRef, {
             score: finalScore,
             type: type, // 'merit' or 'demerit'
@@ -52,11 +70,16 @@ async function handleAddPenalty(e) {
 
 // 상벌점 데이터 불러오기 및 렌더링
 function loadPenaltyData() {
-    const meritsRef = collection(db, `users/${uid}/merits`);
-    // 최신순으로 정렬해서 쿼리
+    // 기존에 켜져 있던 리스너가 있다면 끄기 (중복 방지)
+    if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+    }
+
+    const meritsRef = collection(db, `users/${currentUid}/merits`);
     const q = query(meritsRef, orderBy("createdAt", "desc"));
 
-    onSnapshot(q, (snapshot) => {
+    // onSnapshot의 반환값을 unsubscribeSnapshot에 저장해둠
+    unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
         const listContainer = document.getElementById('penalty-list');
         const scoreDisplay = document.getElementById('total-score');
         const scoreStatusText = document.getElementById('score-status-text');
@@ -79,10 +102,7 @@ function loadPenaltyData() {
             const item = document.createElement('div');
             item.className = 'cl-list-item penalty-item';
             
-            // 날짜 포맷팅
             const dateStr = data.createdAt ? data.createdAt.toDate().toLocaleDateString('ko-KR') : '방금 전';
-            
-            // 상점(+)은 초록색, 벌점(-)은 빨간색
             const scoreColor = data.score > 0 ? '#1e8e3e' : '#d93025';
             const scoreText = data.score > 0 ? `+${data.score}` : `${data.score}`;
 
@@ -116,10 +136,9 @@ function loadPenaltyData() {
         document.querySelectorAll('.btn-delete').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 if(confirm("이 기록을 삭제하시겠습니까?")) {
-                    // 삭제 대상 ID 획득 시 버튼이나 버튼 안의 아이콘이 클릭되었을 때를 대비
                     const targetBtn = e.target.closest('.btn-delete');
                     const docId = targetBtn.getAttribute('data-id');
-                    await deleteDoc(doc(db, `users/${uid}/merits/${docId}`));
+                    await deleteDoc(doc(db, `users/${currentUid}/merits/${docId}`));
                 }
             });
         });
