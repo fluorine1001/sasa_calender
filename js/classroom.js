@@ -2,21 +2,36 @@
 import { db } from './firebase-init.js';
 import { doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
-// 가이드 보안 규칙: localStorage에서 UID 확보
-const uid = localStorage.getItem('currentUserUid');
 // ⚠️ 본인의 실제 구글 클라이언트 ID로 반드시 변경하세요!
 const CLIENT_ID = '779057546808-59940trcdab7uouqn1ro0bi8bf85cost.apps.googleusercontent.com'; 
 
 let tokenClient;
+let uid = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // 실행 시점에 다시 한 번 가져오기
+    uid = localStorage.getItem('currentUserUid');
     console.log("[Classroom] 페이지 로드됨. UID:", uid);
+    
     if (!uid) {
-        console.warn("[Classroom] UID가 없습니다. 로그인이 필요합니다.");
-        return;
+        // 만약 로그인이 늦게 처리될 수 있으므로 약간의 지연 후 재확인 시도
+        setTimeout(async () => {
+            uid = localStorage.getItem('currentUserUid');
+            if (uid) {
+                await initClassroom();
+            } else {
+                console.warn("[Classroom] UID가 없습니다. 로그인이 필요합니다.");
+            }
+        }, 1000);
+    } else {
+        await initClassroom();
     }
+});
 
-    // 1. 초기 UI 상태 업데이트
+async function initClassroom() {
+    if (!uid) return;
+
+    // 1. UI 상태 업데이트
     await updateClassroomUI();
 
     // 2. Google OAuth 초기화
@@ -61,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     const importBtn = document.getElementById('classroom-import-btn');
     if (importBtn) importBtn.addEventListener('click', onImportBtnClick);
-});
+}
 
 // 연동 상태에 따라 화면을 갱신하는 함수
 async function updateClassroomUI() {
