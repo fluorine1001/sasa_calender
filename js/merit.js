@@ -161,22 +161,30 @@ function loadPenaltyData() {
 async function checkAndLoadGlobalSettings() {
     if (unsubscribeGlobals) unsubscribeGlobals();
     const settingsRef = doc(db, 'system', 'globals');
+    
     try {
         if (isCurrentUserAdmin) {
             const docSnap = await getDoc(settingsRef);
-            // 문서가 없으면 기본값(수식 가이드 포함)으로 생성
             if (!docSnap.exists()) {
+                // 1. 문서 자체가 아예 없는 경우 (최초 세팅)
                 await setDoc(settingsRef, { notices: [], rules: [], latexGuide: defaultLatexGuide });
+            } else {
+                // 2. 문서가 이미 있는데 latexGuide 필드만 없는 경우 (기존 유저 업데이트)
+                const data = docSnap.data();
+                if (!data.latexGuide) {
+                    await updateDoc(settingsRef, { latexGuide: defaultLatexGuide });
+                }
             }
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error("전역 설정 로드 에러:", e);
+    }
 
     unsubscribeGlobals = onSnapshot(settingsRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             currentGlobals.notices = data.notices || [];
             currentGlobals.rules = data.rules || [];
-            // DB에 가이드가 없으면 코드 내장 기본값 사용
             currentGlobals.latexGuide = data.latexGuide && data.latexGuide.length > 0 ? data.latexGuide : defaultLatexGuide;
         } else {
             currentGlobals = { notices: [], rules: [], latexGuide: defaultLatexGuide };
