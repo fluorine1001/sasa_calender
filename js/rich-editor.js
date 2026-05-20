@@ -6,8 +6,8 @@ export class NoticeEditor {
         this.quill = null;
         
         // 💡 Cloudinary 설정 (이미지/비디오 공용 업로드를 위해 auto 사용)
-        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/auto/upload"; 
-        this.uploadPreset = "YOUR_UNSIGNED_PRESET"; 
+        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/djryl7blo/auto/upload"; 
+        this.uploadPreset = "SASAcalender"; 
 
         // 통합 미디어 모달 상태 관리
         this.modalState = {
