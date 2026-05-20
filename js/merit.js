@@ -4,10 +4,9 @@ import {
     getDoc, setDoc, updateDoc 
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-// 📁 파일 스토리지를 위한 모듈 추가
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js";
 
-const storage = getStorage(); // 스토리지 초기화
+// ❌ 파일 스토리지(Storage) 모듈 임포트 제거됨
+
 let currentUid = null;
 let isCurrentUserAdmin = false;
 let unsubscribeSnapshot = null;
@@ -52,7 +51,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // ==========================================
-// 👤 [개인] 상벌점 데이터 추가 및 로드 (기존 동일)
+// 👤 [개인] 상벌점 데이터 추가 및 로드 
 // ==========================================
 async function handleAddPenalty(e) {
     e.preventDefault();
@@ -153,13 +152,12 @@ async function checkAndLoadGlobalSettings() {
     });
 }
 
-// 📌 공지사항 렌더링 (아코디언, TeX, 첨부파일)
+// 📌 공지사항 렌더링 (아코디언, TeX, 첨부파일 링크)
 function renderNotices(notices) {
     const titleEl = document.getElementById('latest-notice-title');
     const listEl = document.getElementById('notice-list-container');
     if (!titleEl || !listEl) return;
 
-    // 최상단 요약 텍스트 처리 (구버전 문자열과 신버전 객체 호환)
     const latestNotice = notices.length > 0 ? notices[notices.length - 1] : null;
     let topTitle = "등록된 공지사항이 없습니다.";
     if (latestNotice) {
@@ -173,7 +171,6 @@ function renderNotices(notices) {
     } else {
         notices.slice().reverse().forEach((n, reversedIndex) => {
             const originalIndex = notices.length - 1 - reversedIndex;
-            // 구버전 호환용 변환
             const noticeObj = typeof n === 'string' ? { title: n, body: '', fileUrl: null, fileName: null } : n;
             
             html += `
@@ -190,7 +187,7 @@ function renderNotices(notices) {
                         <div class="tex-content" style="white-space: pre-wrap;">${noticeObj.body || '본문 내용이 없습니다.'}</div>
                         ${noticeObj.fileUrl ? `
                             <div style="margin-top:10px; padding: 10px; background:#e8f0fe; border-radius:5px; display:inline-block;">
-                                📎 <a href="${noticeObj.fileUrl}" target="_blank" style="color:#1a73e8; text-decoration:none; font-weight:bold;">${noticeObj.fileName || '첨부파일 다운로드'}</a>
+                                🔗 <a href="${noticeObj.fileUrl}" target="_blank" style="color:#1a73e8; text-decoration:none; font-weight:bold;">${noticeObj.fileName || '첨부 링크 열기'}</a>
                             </div>
                         ` : ''}
                     </div>
@@ -199,23 +196,25 @@ function renderNotices(notices) {
         });
     }
 
-    // 관리자용 공지사항 추가 폼
+    // 💡 관리자용 폼: 파일 업로드 대신 '외부 링크' 입력으로 변경
     if (isCurrentUserAdmin) {
         html += `
             <div style="padding: 15px; margin: 10px 15px; background: #fdfdfd; border: 1px dashed #ccc; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
                 <input type="text" id="new-notice-title" placeholder="새 공지사항 제목" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                 <textarea id="new-notice-body" placeholder="본문 내용 (TeX 수식 지원: $$수식$$ 또는 $수식$)" rows="3" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; resize:vertical;"></textarea>
+                
                 <div style="display:flex; gap: 10px; align-items:center;">
-                    <input type="file" id="new-notice-file" style="font-size: 12px; flex:1;">
-                    <button id="btn-add-notice-complex" class="cl-btn-primary" style="padding: 8px 16px; flex-shrink:0;">공지 등록</button>
+                    <input type="text" id="new-notice-file-name" placeholder="링크 이름 (예: 안내문.pdf)" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; width: 30%;">
+                    <input type="url" id="new-notice-file-url" placeholder="첨부파일 링크 (구글 드라이브 등 URL)" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; flex:1;">
                 </div>
+                
+                <button id="btn-add-notice-complex" class="cl-btn-primary" style="padding: 8px 16px; margin-top: 4px;">공지 등록</button>
             </div>
         `;
     }
     
     listEl.innerHTML = html;
 
-    // 💡 TeX 수식 렌더링 (KaTeX)
     if (window.renderMathInElement) {
         renderMathInElement(listEl, {
             delimiters: [
@@ -265,7 +264,6 @@ function renderRules(rules) {
 // 🖱️ 이벤트 리스너 (아코디언 토글 & 관리자 CRUD)
 // ==========================================
 document.addEventListener('click', async (e) => {
-    // 📌 아코디언 토글 (공지사항 제목 클릭 시)
     const titleBar = e.target.closest('.notice-title-bar');
     if (titleBar && !e.target.closest('button')) {
         const targetId = titleBar.getAttribute('data-target');
@@ -281,38 +279,30 @@ document.addEventListener('click', async (e) => {
     const target = e.target.closest('button');
     if (!target) return;
 
-    // 📌 새 공지사항 추가 (복합 폼 - 파일 업로드 포함)
+    // 📌 새 공지사항 추가 (스토리지 없이 링크 저장 방식)
     if (target.id === 'btn-add-notice-complex') {
         const titleEl = document.getElementById('new-notice-title');
         const bodyEl = document.getElementById('new-notice-body');
-        const fileEl = document.getElementById('new-notice-file');
+        const fileNameEl = document.getElementById('new-notice-file-name');
+        const fileUrlEl = document.getElementById('new-notice-file-url');
         
         const title = titleEl.value.trim();
         const body = bodyEl.value.trim();
-        const file = fileEl.files[0];
+        const fileUrl = fileUrlEl.value.trim();
+        let fileName = fileNameEl.value.trim();
 
         if (!title) return alert("공지사항 제목을 입력해주세요.");
+        if (fileUrl && !fileName) fileName = '첨부 링크 열기'; // URL은 있는데 이름이 없으면 기본값 세팅
         
         target.innerText = "업로드 중...";
         target.disabled = true;
 
-        let fileUrl = null;
-        let fileName = null;
-
         try {
-            if (file) {
-                // 파일이 있으면 Storage에 업로드
-                const fileRef = storageRef(storage, `notices/${Date.now()}_${file.name}`);
-                await uploadBytes(fileRef, file);
-                fileUrl = await getDownloadURL(fileRef);
-                fileName = file.name;
-            }
-
             const newNoticeObj = {
                 title: title,
                 body: body,
-                fileUrl: fileUrl,
-                fileName: fileName,
+                fileUrl: fileUrl || null,
+                fileName: fileName || null,
                 createdAt: new Date().toISOString()
             };
 
@@ -328,7 +318,6 @@ document.addEventListener('click', async (e) => {
         }
     }
 
-    // 📌 일반 항목 추가 (징계 기준)
     if (target.classList.contains('btn-add-global')) {
         const type = target.dataset.type; 
         const inputEl = document.getElementById(`new-rule-input`);
@@ -340,7 +329,6 @@ document.addEventListener('click', async (e) => {
         }
     }
     
-    // 📌 항목 삭제 (공통)
     if (target.classList.contains('btn-delete-global')) {
         const type = target.dataset.type;
         const idx = target.dataset.index;
