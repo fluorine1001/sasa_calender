@@ -8,7 +8,7 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 // 🚀 새롭게 분리한 독립 에디터 클래스 불러오기
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 merit.js 로드 완료 (Firebase 기반 동적 수식 가이드 및 중첩 징계 기준 아코디언 탑재)");
+console.log("🚀 merit.js 로드 완료 (인라인 수정 기능 및 '벌점 부과 사유' 명칭 변경 반영)");
 
 let currentUid = null;
 let isCurrentUserAdmin = false;
@@ -37,7 +37,7 @@ const defaultLatexGuide = [
     }
 ];
 
-// 💡 중첩 징계 기준 구조를 지원하기 위한 글로벌 상태 초기화
+// 💡 글로벌 상태 데이터 구조 정의
 let currentGlobals = { notices: [], rules: [], latexGuide: defaultLatexGuide };
 
 // 화면을 다시 그릴 때 열려있던 토글 상태를 유지하기 위한 메모리 Set
@@ -159,7 +159,7 @@ function loadPenaltyData() {
 }
 
 // ==========================================
-// 🛠️ [전역/관리자] 고도화된 공지사항 및 징계기준
+// 🛠️ [전역/관리자] 고도화된 공지사항 및 벌점 부과 사유
 // ==========================================
 async function checkAndLoadGlobalSettings() {
     if (unsubscribeGlobals) unsubscribeGlobals();
@@ -296,7 +296,7 @@ function renderNotices(notices) {
 }
 
 // ==========================================
-// 🔄 💥 [업그레이드] 중첩 리스트형 징계 기준 렌더링 시스템
+// 🔄 💥 [업그레이드] 중첩 리스트형 벌점 부과 사유 렌더링 및 더블클릭 수정 시스템
 // ==========================================
 function renderRules(rules) { 
     const listEl = document.getElementById('discipline-list-container');
@@ -304,7 +304,7 @@ function renderRules(rules) {
     
     let html = '';
 
-    // 기존 String 배열 유저 구버전 데이터 마이그레이션 및 파싱 처리
+    // 구버전 데이터 호환 마이그레이션 처리
     let parsedRules = [];
     rules.forEach((item) => {
         if (typeof item === 'string') {
@@ -315,7 +315,7 @@ function renderRules(rules) {
     });
 
     if (parsedRules.length === 0) { 
-        html += '<p style="padding: 20px; color:#c5221f; text-align:center; font-size:14px;">등록된 벌점 분류 기준이 없습니다.</p>'; 
+        html += '<p style="padding: 20px; color:#c5221f; text-align:center; font-size:14px;">등록된 벌점 부과 사유가 없습니다.</p>'; 
     } else {
         html += `<div class="rules-accordion-wrapper" style="display:flex; flex-direction:column; gap:8px; padding:12px;">`;
         
@@ -332,7 +332,7 @@ function renderRules(rules) {
                 ruleGroup.reasons.forEach((reason, childIdx) => {
                     childReasonsHtml += `
                         <li style="margin-bottom: 6px; display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#333; padding:4px 0; border-bottom: 1px dashed #f1f1f1;">
-                            <span>• ${reason}</span>
+                            <span class="${isCurrentUserAdmin ? 'editable-sub-reason' : ''}" data-parent-idx="${parentIdx}" data-child-idx="${childIdx}" title="${isCurrentUserAdmin ? '더블클릭하여 사유 수정' : ''}" style="cursor:${isCurrentUserAdmin ? 'pointer' : 'default'}; flex:1; padding-right:10px;">• ${reason}</span>
                             ${isCurrentUserAdmin ? `
                                 <button class="btn-delete-sub-reason" data-parent-idx="${parentIdx}" data-child-idx="${childIdx}" style="background:none; border:none; cursor:pointer; color:#d93025; font-size:12px; padding:2px 6px;">삭제</button>
                             ` : ''}
@@ -344,7 +344,7 @@ function renderRules(rules) {
             html += `
                 <div class="rule-group-item" style="border: 1px solid #e0e0e0; border-radius:6px; background:#fff; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
                     <div class="rule-group-header" data-group-idx="${parentIdx}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; cursor:pointer; background:#f8fafc; user-select:none;">
-                        <span style="font-weight:bold; color:#1e3a8a; font-size:14px;">📊 ${ruleGroup.score} <small style="color:#64748b; font-weight:normal; margin-left:6px;">(${ruleGroup.reasons ? ruleGroup.reasons.length : 0}건)</small></span>
+                        <span class="${isCurrentUserAdmin ? 'editable-parent-group' : ''}" data-parent-idx="${parentIdx}" title="${isCurrentUserAdmin ? '더블클릭하여 분류 이름 수정' : ''}" style="font-weight:bold; color:#1e3a8a; font-size:14px; cursor:${isCurrentUserAdmin ? 'pointer' : 'default'};">📊 ${ruleGroup.score} <small style="color:#64748b; font-weight:normal; margin-left:6px;">(${ruleGroup.reasons ? ruleGroup.reasons.length : 0}건)</small></span>
                         <div style="display:flex; align-items:center; gap:12px;">
                             ${isCurrentUserAdmin ? `
                                 <button class="btn-delete-parent-group" data-parent-idx="${parentIdx}" style="background:none; border:none; cursor:pointer; font-size:12px; color:#d93025;" title="분류 삭제">✕</button>
@@ -375,7 +375,7 @@ function renderRules(rules) {
     if (isCurrentUserAdmin) {
         html += `
             <div style="padding: 12px; margin: 10px 12px; background: #fdfdfd; border: 1px dashed #cbd5e1; border-radius: 6px; display: flex; gap: 8px; align-items:center;">
-                <input type="text" id="new-rule-input" placeholder="예: 벌점 1점, 벌점 3점, 상점 기준 등" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+                <input type="text" id="new-rule-input" placeholder="예: 벌점 1점 사유, 벌점 3점 사유 등" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
                 <button class="btn-add-parent-group cl-btn-primary" style="padding:8px 14px; font-size:13px; font-weight:bold; background:#1a73e8; border:none; color:white; border-radius:4px; cursor:pointer;">➕ 분류 추가</button>
             </div>
         `;
@@ -385,7 +385,7 @@ function renderRules(rules) {
 }
 
 // ==========================================
-// 🖱️ 이벤트 리스너 (아코디언 토글 & 관리자 통합 액션)
+// 🖱️ 이벤트 리스너 (아코디언 토글, 관리자 통합 액션 및 더블클릭 수정)
 // ==========================================
 document.addEventListener('click', async (e) => {
     // 1. 공지사항 아코디언 토글 제어
@@ -396,9 +396,9 @@ document.addEventListener('click', async (e) => {
         return;
     }
 
-    // 2. 💥 중첩 벌점 징계 기준 아코디언 토글 제어 (비로그인/로그인 공용)
+    // 2. 중첩 벌점 부과 사유 아코디언 토글 제어 (수정 모드 인풋창 클릭 유입 차단)
     const ruleHeader = e.target.closest('.rule-group-header');
-    if (ruleHeader && !e.target.closest('button')) {
+    if (ruleHeader && !e.target.closest('button') && !e.target.closest('input')) {
         const pIdx = parseInt(ruleHeader.dataset.groupIdx, 10);
         const bodyEl = document.getElementById(`rule-group-body-${pIdx}`);
         const arrowEl = ruleHeader.querySelector('.rule-arrow');
@@ -406,11 +406,11 @@ document.addEventListener('click', async (e) => {
         if (bodyEl.style.display === 'none') {
             bodyEl.style.display = 'block';
             arrowEl.style.transform = 'rotate(90deg)';
-            openRulesTracker.add(pIdx); // 열림 상태 기록
+            openRulesTracker.add(pIdx);
         } else {
             bodyEl.style.display = 'none';
             arrowEl.style.transform = '';
-            openRulesTracker.delete(pIdx); // 닫힘 상태 기록
+            openRulesTracker.delete(pIdx);
         }
         return;
     }
@@ -452,31 +452,30 @@ document.addEventListener('click', async (e) => {
         return;
     }
 
-    // 5. 💥 [중첩 리스트] 1단계 - 대분류(벌점 조건) 추가
+    // 5. [중첩 리스트] 대분류(벌점 조건) 추가
     if (target.classList.contains('btn-add-parent-group')) {
         const inputEl = document.getElementById('new-rule-input');
         const text = inputEl.value.trim();
         if (!text) return alert("추가할 벌점 분류명을 적어주세요.");
         
-        // 새 데이터 구조 push
         currentGlobals.rules.push({ score: text, reasons: [] });
         await updateDoc(settingsRef, { rules: currentGlobals.rules });
         inputEl.value = '';
         return;
     }
 
-    // 6. 💥 [중첩 리스트] 1단계-1 - 대분류 전체 삭제
+    // 6. [중첩 리스트] 대분류 전체 삭제
     if (target.classList.contains('btn-delete-parent-group')) {
         if (!confirm("이 벌점 분류 그룹과 소속된 모든 하위 사유가 영구 삭제됩니다. 진행할까요?")) return;
         const parentIdx = parseInt(target.dataset.parentIdx, 10);
         
         currentGlobals.rules.splice(parentIdx, 1);
-        openRulesTracker.delete(parentIdx); // 추적기 초기화
+        openRulesTracker.delete(parentIdx);
         await updateDoc(settingsRef, { rules: currentGlobals.rules });
         return;
     }
 
-    // 7. 💥 [중첩 리스트] 2단계 - 대분류 내부에 '세부 사유' 서브 추가
+    // 7. [중첩 리스트] 대분류 내부에 '세부 사유' 서브 추가
     if (target.classList.contains('btn-add-sub-reason')) {
         const parentIdx = parseInt(target.dataset.parentIdx, 10);
         const inputEl = document.getElementById(`new-reason-input-${parentIdx}`);
@@ -488,19 +487,93 @@ document.addEventListener('click', async (e) => {
         }
         
         currentGlobals.rules[parentIdx].reasons.push(text);
-        openRulesTracker.add(parentIdx); // 새로 추가된 그룹은 화면 갱신 후에도 강제 열림 처리
+        openRulesTracker.add(parentIdx);
         await updateDoc(settingsRef, { rules: currentGlobals.rules });
         return;
     }
 
-    // 8. 💥 [중첩 리스트] 2단계-1 - 세부 사유 건별 삭제
+    // 8. [중첩 리스트] 세부 사유 건별 삭제
     if (target.classList.contains('btn-delete-sub-reason')) {
         const parentIdx = parseInt(target.dataset.parentIdx, 10);
         const childIdx = parseInt(target.dataset.childIdx, 10);
         
         currentGlobals.rules[parentIdx].reasons.splice(childIdx, 1);
-        openRulesTracker.add(parentIdx); // 삭제 액션 후에도 열림 상태 유지 보존
+        openRulesTracker.add(parentIdx);
         await updateDoc(settingsRef, { rules: currentGlobals.rules });
         return;
+    }
+});
+
+// ==========================================
+// 📝 💥 [신규] 관리자용 대분류/세부사유 인라인 더블클릭 수정 이벤트 바인딩
+// ==========================================
+document.addEventListener('dblclick', (e) => {
+    if (!isCurrentUserAdmin) return;
+
+    // A. 대분류(벌점 헤더명) 수정 트리거
+    const parentTarget = e.target.closest('.editable-parent-group');
+    if (parentTarget) {
+        e.stopPropagation();
+        const pIdx = parseInt(parentTarget.dataset.parentIdx, 10);
+        const currentText = currentGlobals.rules[pIdx].score;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentText;
+        input.style.cssText = 'padding:2px 6px; font-size:14px; border:1px solid #1a73e8; border-radius:4px; font-weight:bold; color:#1e3a8a; width:180px; outline:none;';
+
+        const saveHandler = async () => {
+            const val = input.value.trim();
+            if (val && val !== currentText) {
+                currentGlobals.rules[pIdx].score = val;
+                const settingsRef = doc(db, 'system', 'globals');
+                await updateDoc(settingsRef, { rules: currentGlobals.rules });
+            } else {
+                renderRules(currentGlobals.rules); // 원복
+            }
+        };
+
+        input.onkeydown = (evt) => { if (evt.key === 'Enter') saveHandler(); };
+        input.onblur = saveHandler;
+
+        parentTarget.innerHTML = '';
+        parentTarget.appendChild(input);
+        input.focus();
+        input.select();
+        return;
+    }
+
+    // B. 세부 사유 항목 내용 수정 트리거
+    const childTarget = e.target.closest('.editable-sub-reason');
+    if (childTarget) {
+        e.stopPropagation();
+        const pIdx = parseInt(childTarget.dataset.parentIdx, 10);
+        const cIdx = parseInt(childTarget.dataset.childIdx, 10);
+        const currentText = currentGlobals.rules[pIdx].reasons[cIdx];
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentText;
+        input.style.cssText = 'padding:2px 6px; font-size:13px; border:1px solid #10b981; border-radius:4px; color:#333; width:80%; outline:none;';
+
+        const saveHandler = async () => {
+            const val = input.value.trim();
+            if (val && val !== currentText) {
+                currentGlobals.rules[pIdx].reasons[cIdx] = val;
+                openRulesTracker.add(pIdx); // 수정된 소속 그룹은 열려있도록 세팅
+                const settingsRef = doc(db, 'system', 'globals');
+                await updateDoc(settingsRef, { rules: currentGlobals.rules });
+            } else {
+                renderRules(currentGlobals.rules); // 원복
+            }
+        };
+
+        input.onkeydown = (evt) => { if (evt.key === 'Enter') saveHandler(); };
+        input.onblur = saveHandler;
+
+        childTarget.innerHTML = '';
+        childTarget.appendChild(input);
+        input.focus();
+        input.select();
     }
 });
