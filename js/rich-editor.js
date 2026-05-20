@@ -160,6 +160,9 @@ export class NoticeEditor {
         
         const label = type === 'image' ? '이미지' : '동영상';
 
+        wInput.placeholder = ''; 
+        hInput.placeholder = '';
+
         if (mode === 'upload') {
             title.innerText = `🖼️ 새 ${label} 추가 옵션`;
             tabBar.style.display = 'flex';
@@ -167,10 +170,9 @@ export class NoticeEditor {
             urlInput.value = '';
             fileInput.accept = type === 'image' ? 'image/*' : 'video/*';
             
-            // 초기 탭 설정
-            this.switchTab(type === 'video' ? 'url' : 'file');
+            const initialSource = type === 'video' ? 'url' : 'file';
+            this.switchTab(initialSource);
         } else {
-            // 수정 모드
             title.innerText = `⚙️ ${label} 크기 속성 수정`;
             tabBar.style.display = 'none';
             document.getElementById('media-modal-file-wrapper').style.display = 'none';
@@ -179,13 +181,12 @@ export class NoticeEditor {
             wInput.value = Math.round(width);
             hInput.value = Math.round(height);
             this.setInputDisabled(false);
-            wInput.placeholder = ''; hInput.placeholder = '';
         }
 
         modal.style.display = 'flex';
     }
 
-    // 📌 탭 변경 제어 로직 (버그 수정 반영)
+    // 📌 탭 변경 제어 로직 (요청에 따라 텍스트 가이드 메시지 완전 제거)
     switchTab(sourceType) {
         this.modalState.source = sourceType;
         const btnFile = document.getElementById('tab-btn-file');
@@ -195,6 +196,9 @@ export class NoticeEditor {
         const wInput = document.getElementById('media-modal-width');
         const hInput = document.getElementById('media-modal-height');
 
+        wInput.placeholder = '';
+        hInput.placeholder = '';
+
         if (sourceType === 'file') {
             btnFile.style.background = '#fff'; btnFile.style.color = '#1a73e8';
             btnUrl.style.background = 'transparent'; btnUrl.style.color = '#5f6368';
@@ -202,18 +206,12 @@ export class NoticeEditor {
             urlWrapper.style.display = 'none';
             
             if (!this.modalState.file) {
-                // 파일을 아직 선택하지 않았을 때: 잠금 유지 및 직관적인 안내 문구 부여
                 this.setInputDisabled(true);
                 wInput.value = ''; hInput.value = '';
-                wInput.placeholder = '파일 첨부 시 활성화';
-                hInput.placeholder = '파일 첨부 시 활성화';
             } else {
-                // 파일을 이미 선택한 상태로 돌아왔을 때: 잠금 완전 해제
                 this.setInputDisabled(false);
-                wInput.placeholder = ''; hInput.placeholder = '';
             }
         } else {
-            // URL 탭 선택 시: 강제 잠금 및 업로드 후 수정 안내
             btnUrl.style.background = '#fff'; btnUrl.style.color = '#1a73e8';
             btnFile.style.background = 'transparent'; btnFile.style.color = '#5f6368';
             fileWrapper.style.display = 'none';
@@ -221,8 +219,6 @@ export class NoticeEditor {
             
             this.setInputDisabled(true);
             wInput.value = ''; hInput.value = '';
-            wInput.placeholder = '업로드 후 수정 가능';
-            hInput.placeholder = '업로드 후 수정 가능';
         }
     }
 
@@ -260,7 +256,6 @@ export class NoticeEditor {
                     this.modalState.ratio = img.width / img.height;
                     wInput.value = img.width; hInput.value = img.height;
                     this.setInputDisabled(false);
-                    wInput.placeholder = ''; hInput.placeholder = ''; // 잠금 문구 해제
                     URL.revokeObjectURL(fileUrl);
                 };
                 img.src = fileUrl;
@@ -270,7 +265,6 @@ export class NoticeEditor {
                     this.modalState.ratio = video.videoWidth / video.videoHeight;
                     wInput.value = video.videoWidth; hInput.value = video.videoHeight;
                     this.setInputDisabled(false);
-                    wInput.placeholder = ''; hInput.placeholder = ''; // 잠금 문구 해제
                     URL.revokeObjectURL(fileUrl);
                 };
                 video.src = fileUrl;
@@ -305,7 +299,6 @@ export class NoticeEditor {
                     const url = document.getElementById('media-modal-url-input').value.trim();
                     if (!url) return alert("올바른 미디어 URL 주소를 입력해 주세요.");
                     
-                    // URL 업로드 시: 비디오는 기본 640x360, 이미지는 auto(원본 크기)로 임시 지정
                     const reqWidth = this.modalState.type === 'video' ? 640 : 'auto';
                     const reqHeight = this.modalState.type === 'video' ? 360 : 'auto';
                     
@@ -313,7 +306,6 @@ export class NoticeEditor {
                     this.insertIntoQuill(this.formatVideoUrl(url), reqWidth, reqHeight);
                 }
             } else if (this.modalState.mode === 'edit' && this.modalState.targetNode) {
-                // 업로드 후 속성 변경 반영
                 modal.style.display = 'none';
                 const node = this.modalState.targetNode;
                 const reqWidth = wInput.value;
@@ -391,10 +383,8 @@ export class NoticeEditor {
     formatVideoUrl(url) {
         if (this.modalState.type !== 'video') return url;
         
-        // 유튜브 파싱 및 처리
         const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
         if (ytMatch) {
-            // autoplay=0을 명시하여 자동재생 강제 차단, 컨트롤러 노출(controls=1) 보장
             return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=0&controls=1&rel=0`;
         }
         return url;
@@ -438,7 +428,6 @@ export class NoticeEditor {
             if (nodes.length > 0) {
                 const targetNode = nodes[nodes.length - 1];
                 
-                // width가 'auto'가 아닌 경우에만 픽셀 강제 주입
                 if (width !== 'auto' && height !== 'auto') {
                     targetNode.setAttribute('width', width);
                     targetNode.setAttribute('height', height);
@@ -446,7 +435,6 @@ export class NoticeEditor {
                     targetNode.style.height = height + 'px';
                 }
 
-                // 로컬 파일 수신 동영상의 자동재생 방지 및 컨트롤러 제어 바인딩
                 if (targetNode.tagName === 'VIDEO') {
                     targetNode.removeAttribute('autoplay');
                     targetNode.setAttribute('controls', 'true');
