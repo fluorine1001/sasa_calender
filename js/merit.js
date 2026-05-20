@@ -6,9 +6,10 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
 let currentUid = null;
-let isCurrentUserAdmin = false; // 현재 로그인한 사용자의 관리자 여부
+let isCurrentUserAdmin = false;
 let unsubscribeSnapshot = null;
-let currentGlobals = { notices: [], rules: [] }; // 전역 데이터 저장용
+let unsubscribeGlobals = null; // 전역 설정용 unsubscribe 추가
+let currentGlobals = { notices: [], rules: [] };
 
 // ==========================================
 // 🚀 초기화 및 이벤트 연결
@@ -19,34 +20,40 @@ if (form) {
     form.addEventListener('submit', handleAddPenalty);
 }
 
-// Firebase 로그인 상태 확인 후 데이터 로드
 const auth = getAuth();
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUid = user.uid;
         
-        // 1. 현재 사용자가 관리자인지 Firestore에서 확인
-        const userDoc = await getDoc(doc(db, `users/${currentUid}`));
-        if (userDoc.exists() && userDoc.data().isAdmin === true) {
-            isCurrentUserAdmin = true;
-        } else {
+        try {
+            const userDoc = await getDoc(doc(db, `users/${currentUid}`));
+            if (userDoc.exists() && userDoc.data().isAdmin === true) {
+                isCurrentUserAdmin = true;
+                console.log("👑 관리자 계정 로그인 확인됨");
+            } else {
+                isCurrentUserAdmin = false;
+                console.log("👤 일반 사용자 계정 로그인됨");
+            }
+        } catch (error) {
+            console.error("❌ 권한 확인 중 오류 발생:", error);
             isCurrentUserAdmin = false;
         }
 
-        // 2. 데이터 불러오기
+        // 데이터 불러오기
         loadPenaltyData();      
-        loadGlobalSettings();   
+        await checkAndLoadGlobalSettings(); // 함수명 및 로직 변경
     } else {
         currentUid = null;
         isCurrentUserAdmin = false;
         if (unsubscribeSnapshot) unsubscribeSnapshot();
+        if (unsubscribeGlobals) unsubscribeGlobals();
+        
         const penaltyList = document.getElementById('penalty-list');
         const totalScore = document.getElementById('total-score');
         if(penaltyList) penaltyList.innerHTML = '';
         if(totalScore) totalScore.innerText = '0';
     }
 });
-
 
 // ==========================================
 // 👤 [개인] 상벌점 데이터 추가 및 로드 로직
@@ -82,15 +89,13 @@ async function handleAddPenalty(e) {
 
         document.getElementById('penalty-form').reset();
     } catch (error) {
-        console.error("데이터 추가 실패:", error);
+        console.error("❌ 내역 추가 실패:", error);
         alert("기록을 추가하는 중 오류가 발생했습니다.");
     }
 }
 
 function loadPenaltyData() {
-    if (unsubscribeSnapshot) {
-        unsubscribeSnapshot();
-    }
+    if (unsubscribeSnapshot) unsubscribeSnapshot();
 
     const meritsRef = collection(db, `users/${currentUid}/merits`);
     const q = query(meritsRef, orderBy("createdAt", "desc"));
@@ -158,39 +163,57 @@ function loadPenaltyData() {
                 }
             });
         });
+    }, (error) => {
+        console.error("❌ 개인 상벌점 내역 수신 오류:", error);
     });
 }
-
 
 // ==========================================
 // 🛠️ [전역/관리자] 공지사항 및 징계기준 관리 로직
 // ==========================================
 
-function loadGlobalSettings() {
+async function checkAndLoadGlobalSettings() {
+    if (unsubscribeGlobals) unsubscribeGlobals();
+    
     const settingsRef = doc(db, 'system', 'globals');
 
-    onSnapshot(settingsRef, (docSnap) => {
+    try {
+        // 1. 관리자이고 문서가 아예 없다면 초기 문서 강제 생성
+        if (isCurrentUserAdmin) {
+            const docSnap = await getDoc(settingsRef);
+            if (!docSnap.exists()) {
+                console.log("✨ system/globals 문서가 없어 새로 생성합니다.");
+                await setDoc(settingsRef, { notices: [], rules: [] });
+            }
+        }
+    } catch (e) {
+        console.warn("⚠️ 초기 문서 확인/생성 중 오류 (보안 규칙 확인 필요):", e);
+    }
+
+    // 2. 실시간 데이터 리스너 연결
+    unsubscribeGlobals = onSnapshot(settingsRef, (docSnap) => {
         if (docSnap.exists()) {
             currentGlobals = docSnap.data();
-            // 데이터가 비어있을 경우 대비
             if (!currentGlobals.notices) currentGlobals.notices = [];
             if (!currentGlobals.rules) currentGlobals.rules = [];
-
-            renderNotices(currentGlobals.notices);
-            renderRules(currentGlobals.rules);
         } else {
-            setDoc(settingsRef, { notices: [], rules: [] });
+            currentGlobals = { notices: [], rules: [] };
         }
+        renderNotices(currentGlobals.notices);
+        renderRules(currentGlobals.rules);
+    }, (error) => {
+        console.error("❌ 전역 설정(system/globals) 수신 실패! 보안 규칙을 확인하세요.:", error);
+        // 에러 발생 시 무한 로딩 방지를 위해 빈 배열로 강제 렌더링
+        renderNotices([]);
+        renderRules([]);
     });
 }
 
-// 📌 공지사항 렌더링
 function renderNotices(notices) {
     const titleEl = document.getElementById('latest-notice-title');
     const listEl = document.getElementById('notice-list-container');
     if (!titleEl || !listEl) return;
 
-    // 요약 타이틀 세팅 (최신 공지)
     titleEl.innerText = notices.length > 0 ? notices[notices.length - 1] : "등록된 공지사항이 없습니다.";
 
     let html = '';
@@ -198,7 +221,6 @@ function renderNotices(notices) {
     if (notices.length === 0) {
         html += '<p style="padding: 15px; color: #666;">현재 등록된 공지가 없습니다.</p>';
     } else {
-        // 최신순 렌더링 (역순 순회하되 원본 index 유지)
         notices.slice().reverse().forEach((n, reversedIndex) => {
             const originalIndex = notices.length - 1 - reversedIndex;
             html += `
@@ -215,7 +237,6 @@ function renderNotices(notices) {
         });
     }
 
-    // 관리자인 경우 하단에 항목 추가 폼 노출
     if (isCurrentUserAdmin) {
         html += getAddFormHtml('notice');
     }
@@ -223,7 +244,6 @@ function renderNotices(notices) {
     listEl.innerHTML = html;
 }
 
-// 📌 징계 기준 렌더링
 function renderRules(rules) {
     const listEl = document.getElementById('discipline-list-container');
     if (!listEl) return;
@@ -231,13 +251,13 @@ function renderRules(rules) {
     let html = '';
     
     if (rules.length === 0) {
-        html += '<p style="padding: 10px; color:#c5221f;">등록된 징계 기준이 없습니다.</p>';
+        html += '<p style="padding: 15px; color:#c5221f;">등록된 징계 기준이 없습니다.</p>';
     } else {
-        html += `<ul class="rule-list" style="margin: 0; padding-left: 0; list-style: none;">`;
+        html += `<ul class="rule-list" style="margin: 0; padding: 15px; padding-left: 30px; list-style: none;">`;
         rules.forEach((r, idx) => {
             html += `
                 <li style="margin-bottom: 8px; display:flex; justify-content:space-between; align-items:flex-start; gap: 10px;">
-                    <span style="flex:1; line-height: 1.4;">• ${r}</span>
+                    <span style="flex:1; line-height: 1.4; color: #c5221f;">• ${r}</span>
                     ${isCurrentUserAdmin ? `
                         <div style="display:flex; gap:8px; flex-shrink:0;">
                             <button class="btn-edit-global" data-type="rules" data-index="${idx}" style="background:none;border:none;cursor:pointer;font-size:14px;" title="수정">✏️</button>
@@ -250,7 +270,6 @@ function renderRules(rules) {
         html += `</ul>`;
     }
 
-    // 관리자인 경우 하단에 항목 추가 폼 노출
     if (isCurrentUserAdmin) {
         html += getAddFormHtml('rule');
     }
@@ -258,11 +277,10 @@ function renderRules(rules) {
     listEl.innerHTML = html;
 }
 
-// 항목 추가 UI 생성기 (관리자 전용)
 function getAddFormHtml(type) {
     const placeholder = type === 'notice' ? '새 공지사항 내용 입력' : '새 징계 기준 입력 (예: -5점: 경고)';
     return `
-        <div style="padding: 12px; margin-top: 10px; background: #fdfdfd; border: 1px dashed #ccc; border-radius: 6px; display: flex; gap: 8px;">
+        <div style="padding: 12px; margin: 10px 15px; background: #fdfdfd; border: 1px dashed #ccc; border-radius: 6px; display: flex; gap: 8px;">
             <input type="text" id="new-${type}-input" placeholder="${placeholder}" style="flex:1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
             <button class="btn-add-global cl-btn-primary" data-type="${type}s" style="padding: 8px 16px; flex-shrink:0;">추가</button>
         </div>
@@ -274,7 +292,6 @@ function getAddFormHtml(type) {
 // ==========================================
 
 document.addEventListener('click', async (e) => {
-    // 관리자가 아니면 무시
     if (!isCurrentUserAdmin) return;
     
     const target = e.target.closest('button');
@@ -282,43 +299,55 @@ document.addEventListener('click', async (e) => {
 
     const settingsRef = doc(db, 'system', 'globals');
 
-    // [항목 추가] 동작
+    // [항목 추가]
     if (target.classList.contains('btn-add-global')) {
-        const type = target.dataset.type; // 'notices' 또는 'rules'
+        const type = target.dataset.type; 
         const inputType = type === 'notices' ? 'notice' : 'rule';
         const inputEl = document.getElementById(`new-${inputType}-input`);
+        if(!inputEl) return;
         const text = inputEl.value.trim();
 
         if (text) {
-            currentGlobals[type].push(text);
-            await updateDoc(settingsRef, { [type]: currentGlobals[type] });
-            // onSnapshot이 반응하여 즉시 다시 렌더링되므로, 별도의 input.value='' 처리가 필요 없습니다.
+            try {
+                currentGlobals[type].push(text);
+                await updateDoc(settingsRef, { [type]: currentGlobals[type] });
+            } catch (err) {
+                console.error("❌ 추가 중 데이터베이스 업데이트 실패:", err);
+                alert("권한이 없거나 데이터베이스 오류가 발생했습니다.");
+            }
         }
     }
     
-    // [항목 수정] 동작
+    // [항목 수정]
     else if (target.classList.contains('btn-edit-global')) {
         const type = target.dataset.type;
         const idx = target.dataset.index;
         const oldText = currentGlobals[type][idx];
         
-        // 수정 내용은 prompt를 활용 (가장 직관적이고 빠름)
         const newText = prompt("내용을 수정하세요:", oldText);
         
         if (newText && newText.trim() !== '' && newText !== oldText) {
-            currentGlobals[type][idx] = newText.trim();
-            await updateDoc(settingsRef, { [type]: currentGlobals[type] });
+            try {
+                currentGlobals[type][idx] = newText.trim();
+                await updateDoc(settingsRef, { [type]: currentGlobals[type] });
+            } catch (err) {
+                console.error("❌ 수정 중 데이터베이스 업데이트 실패:", err);
+            }
         }
     }
     
-    // [항목 삭제] 동작
+    // [항목 삭제]
     else if (target.classList.contains('btn-delete-global')) {
         const type = target.dataset.type;
         const idx = target.dataset.index;
         
         if (confirm("이 항목을 정말로 삭제하시겠습니까?")) {
-            currentGlobals[type].splice(idx, 1); // 배열에서 요소 제거
-            await updateDoc(settingsRef, { [type]: currentGlobals[type] });
+            try {
+                currentGlobals[type].splice(idx, 1); 
+                await updateDoc(settingsRef, { [type]: currentGlobals[type] });
+            } catch (err) {
+                console.error("❌ 삭제 중 데이터베이스 업데이트 실패:", err);
+            }
         }
     }
 });
