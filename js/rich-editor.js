@@ -6,8 +6,8 @@ export class NoticeEditor {
         this.quill = null;
         
         // 💡 Cloudinary 설정 부분 (가입 후 본인의 정보로 변경)
-        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/image/upload"; 
-        this.uploadPreset = "YOUR_UNSIGNED_PRESET"; 
+        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/djryl7blo/image/upload"; 
+        this.uploadPreset = "SASAcalender"; 
 
         // 이미지 리사이징 모달 및 우클릭 메뉴 관련 상태 변수
         this.imgModalState = {
