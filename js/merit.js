@@ -5,17 +5,44 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
-console.log("🚀 merit.js 로드 완료 (Rich Text Editor + 수정 기능 + 다중 링크 적용)");
+console.log("🚀 merit.js 로드 완료 (Firebase 기반 동적 수식 가이드 탑재)");
 
 let currentUid = null;
 let isCurrentUserAdmin = false;
 let unsubscribeSnapshot = null;
 let unsubscribeGlobals = null;
-let currentGlobals = { notices: [], rules: [] };
+
+// 💡 기본 수식 가이드 데이터 (Firebase에 데이터가 없을 때 사용될 기본값)
+const defaultLatexGuide = [
+    {
+        category: "기본 문법",
+        inputs: [
+            { syntax: "$수식$", desc: "본문 안 삽입 (Inline)", example: "$f(x) = ax + b$" },
+            { syntax: "$$수식$$", desc: "중앙 독립 행 삽입 (Display)", example: "$$\\int_{a}^{b} x^2 dx$$" }
+        ]
+    },
+    {
+        category: "분수 및 기호",
+        inputs: [
+            { syntax: "\\frac{a}{b}", desc: "분수", example: "$\\frac{a}{b}$" },
+            { syntax: "\\pm, \\times, \\div", desc: "사칙연산 기호", example: "$\\pm, \\times, \\div$" },
+            { syntax: "\\alpha, \\beta, \\pi", desc: "그리스 문자", example: "$\\alpha, \\beta, \\pi$" }
+        ]
+    },
+    {
+        category: "행렬 및 연립방정식",
+        inputs: [
+            { syntax: "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}", desc: "둥근 괄호 행렬", example: "$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$" },
+            { syntax: "\\begin{cases} x+y=1 \\\\ x-y=0 \\end{cases}", desc: "연립방정식", example: "$\\begin{cases} x+y=1 \\\\ x-y=0 \\end{cases}$" }
+        ]
+    }
+];
+
+let currentGlobals = { notices: [], rules: [], latexGuide: defaultLatexGuide };
 
 // 🌟 에디터 및 폼 상태 변수
 let quillEditor = null;
-let editingNoticeIndex = null; // 현재 수정 중인 공지의 인덱스 (null이면 새 글 작성)
+let editingNoticeIndex = null; 
 
 // ==========================================
 // 🚀 초기화 및 로그인 감지
@@ -54,7 +81,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // ==========================================
-// 👤 [개인] 상벌점 데이터 추가 및 로드 (생략/유지)
+// 👤 [개인] 상벌점 데이터 추가 및 로드
 // ==========================================
 async function handleAddPenalty(e) {
     e.preventDefault();
@@ -137,26 +164,31 @@ async function checkAndLoadGlobalSettings() {
     try {
         if (isCurrentUserAdmin) {
             const docSnap = await getDoc(settingsRef);
-            if (!docSnap.exists()) await setDoc(settingsRef, { notices: [], rules: [] });
+            // 문서가 없으면 기본값(수식 가이드 포함)으로 생성
+            if (!docSnap.exists()) {
+                await setDoc(settingsRef, { notices: [], rules: [], latexGuide: defaultLatexGuide });
+            }
         }
     } catch (e) {}
 
     unsubscribeGlobals = onSnapshot(settingsRef, (docSnap) => {
         if (docSnap.exists()) {
-            currentGlobals = docSnap.data();
-            if (!currentGlobals.notices) currentGlobals.notices = [];
-            if (!currentGlobals.rules) currentGlobals.rules = [];
+            const data = docSnap.data();
+            currentGlobals.notices = data.notices || [];
+            currentGlobals.rules = data.rules || [];
+            // DB에 가이드가 없으면 코드 내장 기본값 사용
+            currentGlobals.latexGuide = data.latexGuide && data.latexGuide.length > 0 ? data.latexGuide : defaultLatexGuide;
         } else {
-            currentGlobals = { notices: [], rules: [] };
+            currentGlobals = { notices: [], rules: [], latexGuide: defaultLatexGuide };
         }
         
-        renderAdminForm(); // 관리자 폼 렌더링
+        renderAdminForm(); 
         renderNotices(currentGlobals.notices);
         renderRules(currentGlobals.rules);
     });
 }
 
-// 📌 관리자용 글쓰기/수정 폼 생성 (한 번만 생성되어 에디터 유지)
+// 📌 관리자용 글쓰기/수정 폼 및 가이드 시스템 생성
 function renderAdminForm() {
     if (!isCurrentUserAdmin) return;
     
@@ -177,6 +209,15 @@ function renderAdminForm() {
                 <div id="new-notice-editor" style="height: 150px; font-size: 14px;"></div>
             </div>
             
+            <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; margin-top: 4px;">
+                <div id="latex-guide-toggle" style="background: #f8fafc; padding: 8px 12px; font-size: 13px; font-weight: bold; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                    <span>📐 LaTeX 수식 작성 문법 가이드 보기</span>
+                    <span id="latex-guide-arrow" style="transition: transform 0.2s;">▶</span>
+                </div>
+                <div id="latex-guide-content" style="display: none; padding: 12px; background: #ffffff; font-size: 13px; border-top: 1px solid #e2e8f0; line-height: 1.6; max-height: 250px; overflow-y: auto;">
+                    </div>
+            </div>
+            
             <div style="font-weight:bold; font-size:12px; color:#555; margin-top:10px;">📎 파일 / 링크 첨부 (다중 지원)</div>
             <div id="link-inputs-container" style="display:flex; flex-direction:column; gap:8px;"></div>
             
@@ -190,11 +231,11 @@ function renderAdminForm() {
         `;
         listEl.parentNode.insertBefore(formContainer, listEl);
 
-        // Quill 에디터 초기화 (툴바 설정 포함)
+        // Quill 에디터 초기화
         if (window.Quill) {
             quillEditor = new Quill('#new-notice-editor', {
                 theme: 'snow',
-                placeholder: '본문 내용 입력 (볼드, 색상, 수식 등 적용 가능)',
+                placeholder: '본문 내용 입력 (볼드, 색상, 수식 가이드 참조하여 수식 기입 가능)',
                 modules: {
                     toolbar: [
                         [{ 'header': [1, 2, false] }],
@@ -205,9 +246,77 @@ function renderAdminForm() {
                     ]
                 }
             });
+
+            // 툴바 한국어 툴팁 
+            const toolbarContainer = formContainer.querySelector('.ql-toolbar');
+            if (toolbarContainer) {
+                const toolbarTitles = {
+                    '.ql-bold': '굵게 (Ctrl+B)', '.ql-italic': '기울임꼴 (Ctrl+I)', '.ql-underline': '밑줄 (Ctrl+U)',
+                    '.ql-strike': '취소선', '.ql-color': '글자 색상', '.ql-background': '배경 색상',
+                    '.ql-list[value="ordered"]': '숫자 목록', '.ql-list[value="bullet"]': '점 목록',
+                    '.ql-link': '링크 삽입', '.ql-clean': '서식 지우기',
+                    '.ql-header[value="1"]': '대제목', '.ql-header[value="2"]': '중제목', '.ql-header:not([value])': '본문'
+                };
+                for (let selector in toolbarTitles) {
+                    const el = toolbarContainer.querySelector(selector);
+                    if (el) el.setAttribute('title', toolbarTitles[selector]);
+                }
+            }
         }
         
-        // 기본 링크 칸 1개 추가
+        // 🔍 2. Firebase 기반 LaTeX 가이드 동적 렌더링 및 펼치기/접기
+        const guideToggle = formContainer.querySelector('#latex-guide-toggle');
+        if (guideToggle) {
+            guideToggle.addEventListener('click', () => {
+                const content = formContainer.querySelector('#latex-guide-content');
+                const arrow = formContainer.querySelector('#latex-guide-arrow');
+                
+                if (content.style.display === 'none') {
+                    // 최초 열림 시 Firebase 데이터 기반으로 HTML 동적 생성
+                    if (content.innerHTML.trim() === "") {
+                        const guideData = currentGlobals.latexGuide || defaultLatexGuide;
+                        let html = `<p style="margin-top:0; font-weight: 500; color:#2563eb;">💡 아래 문법을 본문에 입력하면 수식으로 자동 변환됩니다.</p>`;
+                        
+                        guideData.forEach(cat => {
+                            html += `<h4 style="margin:12px 0 6px 0; color:#1e293b;">📌 ${cat.category}</h4>`;
+                            html += `<table style="width:100%; border-collapse:collapse; text-align:left; font-size:12px; margin-bottom:10px;">
+                                        <thead>
+                                            <tr style="background:#f1f5f9; border-bottom: 2px solid #cbd5e1;">
+                                                <th style="padding:6px; width:25%;">설명</th>
+                                                <th style="padding:6px; width:45%;">문법 입력</th>
+                                                <th style="padding:6px; width:30%;">미리보기</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+                            cat.inputs.forEach(item => {
+                                // 역슬래시가 화면에 잘 보이도록 처리
+                                const safeSyntax = item.syntax.replace(/\\/g, '\\\\');
+                                html += `<tr style="border-bottom:1px solid #e2e8f0;">
+                                            <td style="padding:6px; font-weight:bold; color:#475569;">${item.desc}</td>
+                                            <td style="padding:6px;"><code style="background:#f1f5f9; padding:2px 4px; border-radius:3px; font-family:monospace; color:#ef4444;">${safeSyntax}</code></td>
+                                            <td style="padding:6px;">${item.example}</td>
+                                         </tr>`;
+                            });
+                            html += `</tbody></table>`;
+                        });
+                        
+                        content.innerHTML = html;
+                        
+                        // 생성된 HTML 안의 예시 수식들을 KaTeX로 변환
+                        if (window.renderMathInElement) {
+                            window.renderMathInElement(content, { delimiters: [{left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false}] });
+                        }
+                    }
+
+                    content.style.display = 'block';
+                    arrow.style.transform = 'rotate(90deg)';
+                } else {
+                    content.style.display = 'none';
+                    arrow.style.transform = 'rotate(0deg)';
+                }
+            });
+        }
+        
         addLinkRow();
     }
 }
@@ -281,14 +390,13 @@ function renderNotices(notices) {
     }
     listEl.innerHTML = html;
 
-    // 수식 렌더링 (KaTeX 등 연동 시)
     if (window.renderMathInElement) {
         renderMathInElement(listEl, { delimiters: [{left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false}] });
     }
 }
 
-// 📌 징계 기준 (생략/유지)
-function renderRules(rules) { /* 기존 코드와 동일하여 축약 (기능 유지됨) */ 
+// 📌 징계 기준
+function renderRules(rules) { 
     const listEl = document.getElementById('discipline-list-container');
     if (!listEl) return;
     let html = '';
@@ -312,7 +420,6 @@ function renderRules(rules) { /* 기존 코드와 동일하여 축약 (기능 �
 // 🖱️ 이벤트 리스너 (아코디언 토글 & 관리자 통합 액션)
 // ==========================================
 document.addEventListener('click', async (e) => {
-    // 📌 공지 아코디언 토글
     const titleBar = e.target.closest('.notice-title-bar');
     if (titleBar && !e.target.closest('button')) {
         const bodyEl = document.getElementById(titleBar.getAttribute('data-target'));
@@ -325,11 +432,9 @@ document.addEventListener('click', async (e) => {
     const target = e.target.closest('button');
     if (!target) return;
 
-    // 🔗 링크 관련 버튼 동작
     if (target.id === 'btn-add-link-row') return addLinkRow();
     if (target.classList.contains('btn-remove-link-row')) return target.closest('.link-input-row').remove();
 
-    // ✏️ 글 수정 버튼 클릭 시 폼에 데이터 세팅
     if (target.classList.contains('btn-edit-global')) {
         editingNoticeIndex = parseInt(target.dataset.index, 10);
         const notice = currentGlobals.notices[editingNoticeIndex];
@@ -339,41 +444,35 @@ document.addEventListener('click', async (e) => {
         document.getElementById('btn-submit-notice').innerText = "수정 완료";
         document.getElementById('btn-cancel-edit').style.display = "block";
         
-        // 에디터에 기존 HTML 세팅
         if(quillEditor) quillEditor.clipboard.dangerouslyPasteHTML(notice.body || '');
         
-        // 기존 첨부 링크들 세팅
         const linkContainer = document.getElementById('link-inputs-container');
-        linkContainer.innerHTML = ''; // 초기화
+        linkContainer.innerHTML = ''; 
         let files = notice.files || [];
         if(notice.fileUrl && files.length === 0) files.push({name: notice.fileName, url: notice.fileUrl});
         
         if(files.length > 0) {
             files.forEach(f => addLinkRow(f.name, f.url));
         } else {
-            addLinkRow(); // 비어있으면 1개 기본 생성
+            addLinkRow(); 
         }
         
-        // 화면 최상단 폼으로 스크롤 부드럽게 이동
         document.getElementById('admin-notice-form-container').scrollIntoView({ behavior: 'smooth' });
         return;
     }
 
-    // ❌ 수정 취소 버튼
     if (target.id === 'btn-cancel-edit') {
         resetAdminForm();
         return;
     }
 
-    // 📝 폼 제출 (등록 또는 수정)
     if (target.id === 'btn-submit-notice') {
         const titleEl = document.getElementById('new-notice-title');
         const title = titleEl.value.trim();
-        const bodyHtml = quillEditor ? quillEditor.root.innerHTML : ''; // 에디터의 HTML 추출
+        const bodyHtml = quillEditor ? quillEditor.root.innerHTML : ''; 
 
         if (!title) return alert("공지사항 제목을 입력해주세요.");
         
-        // 링크 수집
         const fileRows = document.querySelectorAll('.link-input-row');
         let filesArray = [];
         fileRows.forEach(row => {
@@ -388,21 +487,19 @@ document.addEventListener('click', async (e) => {
         try {
             const newNoticeObj = {
                 title: title,
-                body: bodyHtml, // HTML 포맷으로 저장
+                body: bodyHtml, 
                 files: filesArray, 
                 createdAt: new Date().toISOString()
             };
 
             if (editingNoticeIndex !== null) {
-                // 기존 데이터 수정
                 currentGlobals.notices[editingNoticeIndex] = newNoticeObj;
             } else {
-                // 새 데이터 추가
                 currentGlobals.notices.push(newNoticeObj);
             }
 
             await updateDoc(settingsRef, { notices: currentGlobals.notices });
-            resetAdminForm(); // 성공 시 폼 초기화
+            resetAdminForm(); 
             
         } catch (err) {
             console.error("공지사항 저장 실패:", err);
@@ -413,7 +510,6 @@ document.addEventListener('click', async (e) => {
         return;
     }
 
-    // 기타 전역 설정 버튼 (룰 추가/삭제 및 공지 삭제)
     if (target.classList.contains('btn-add-global')) {
         const inputEl = document.getElementById(`new-rule-input`);
         const text = inputEl.value.trim();
@@ -432,15 +528,14 @@ document.addEventListener('click', async (e) => {
     }
 });
 
-// 📌 폼 상태 초기화 함수
 function resetAdminForm() {
     editingNoticeIndex = null;
     document.getElementById('admin-form-title').innerText = "📝 새 공지사항 작성";
     document.getElementById('new-notice-title').value = '';
     document.getElementById('btn-submit-notice').innerText = "공지 등록";
     document.getElementById('btn-cancel-edit').style.display = "none";
-    if(quillEditor) quillEditor.setContents([]); // 에디터 비우기
+    if(quillEditor) quillEditor.setContents([]); 
     
     document.getElementById('link-inputs-container').innerHTML = '';
-    addLinkRow(); // 기본 1칸 복구
+    addLinkRow(); 
 }
