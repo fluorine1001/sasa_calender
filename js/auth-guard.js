@@ -62,7 +62,7 @@ const setupActivityListeners = () => {
     resetInactivityTimer();
 };
 
-// 💡 [수정됨] 로그아웃 버튼 이벤트 리스너를 이 파일 안으로 편입!
+// 로그아웃 버튼 이벤트 리스너
 const logoutBtn = document.getElementById('logout-btn');
 if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
@@ -113,19 +113,20 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // ==========================================
-// 📜 [이용약관] DB에서 이용약관 데이터 원격 로드
+// 📜 [이용약관] DB에서 이용약관 데이터 원격 로드 (수정됨)
 // ==========================================
 const tosContent = document.getElementById('tos-content');
 if (tosContent) {
     const loadTermsOfService = async () => {
         try {
-            const globalSettingsRef = doc(db, 'system', 'globals');
+            // [수정] 보안 규칙에 맞춰 globals 문서 대신 독립된 tos 문서에서 가져옵니다.
+            const globalSettingsRef = doc(db, 'system', 'tos');
             const docSnap = await getDoc(globalSettingsRef);
 
             if (docSnap.exists() && docSnap.data().tos) {
                 tosContent.innerHTML = docSnap.data().tos;
             } else {
-                tosContent.innerHTML = "제 1 조 (목적)<br>본 약관은 SASA 캘린더 서비스 이용 규정을 정의합니다.<br><br>(※ Firebase console의 system/globals 문서에 'tos' 필드를 추가하여 실시간으로 약관을 수정할 수 있습니다.)";
+                tosContent.innerHTML = "제 1 조 (목적)<br>본 약관은 SASA 캘린더 서비스 이용 규정을 정의합니다.<br><br>(※ Firebase console의 system/tos 문서에 'tos' 필드를 추가하여 실시간으로 약관을 수정할 수 있습니다.)";
             }
         } catch (error) {
             console.error("약관을 불러오지 못했습니다:", error);
