@@ -68,6 +68,12 @@ onAuthStateChanged(auth, async (user) => {
             const nicknameElement = document.getElementById('display-nickname');
             if (nicknameElement) nicknameElement.textContent = userData.nickname;
             
+            // 관리자 패널 표시 로직 (userData에 isAdmin 플래그가 있다고 가정)
+            if (userData.isAdmin) {
+                const adminPanel = document.getElementById('admin-panel');
+                if (adminPanel) adminPanel.style.display = 'block';
+            }
+            
             // 데이터 준비 완료 시 화면 표시
             document.body.style.opacity = "1";
             setupActivityListeners();
