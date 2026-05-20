@@ -7,6 +7,10 @@
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/sections.css">
 
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
     <style>
         body {
             opacity: 0;
@@ -233,7 +237,7 @@
                         <div class="global-section discipline-box" style="background-color: #fce8e6; border: 1px solid #fad2cf;">
                             <h3 style="color: #c5221f; margin-top: 0; margin-bottom: 15px;">⚠️ 벌점 누적에 따른 징계 기준</h3>
                             <div id="discipline-list-container" class="cl-list">
-                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -296,7 +300,7 @@
             document.getElementById('classroom-modal').style.display = 'none';
         });
 
-        // 공지사항 아코디언 토글 로직
+        // 공지사항 전체 컨테이너 아코디언 토글 로직
         const accordionToggle = document.getElementById('notice-accordion-toggle');
         if (accordionToggle) {
             accordionToggle.addEventListener('click', () => {
