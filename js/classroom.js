@@ -361,5 +361,14 @@ function subscribeTasks() {
             };
             listContainer.appendChild(item);
         });
+    }, (error) => {
+        // [추가] 에러 핸들러: 권한 문제 등이 발생하면 여기서 잡힙니다.
+        console.error("과제 목록 감시 에러:", error);
+        if (error.code === 'permission-denied') {
+            const listContainer = document.getElementById('tasks-list');
+            if (listContainer) {
+                listContainer.innerHTML = '<p style="text-align:center; color:#d93025; padding:20px;">데이터 접근 권한이 없습니다. 관리자에게 문의하세요.</p>';
+            }
+        }
     });
 }
