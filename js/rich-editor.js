@@ -6,8 +6,8 @@ export class NoticeEditor {
         this.quill = null;
         
         // 💡 Cloudinary 설정 (이미지/비디오 공용 업로드를 위해 auto 사용)
-        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/djryl7blo/auto/upload"; 
-        this.uploadPreset = "SASAcalender"; 
+        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/auto/upload"; 
+        this.uploadPreset = "YOUR_UNSIGNED_PRESET"; 
 
         // 통합 미디어 모달 상태 관리
         this.modalState = {
@@ -179,12 +179,13 @@ export class NoticeEditor {
             wInput.value = Math.round(width);
             hInput.value = Math.round(height);
             this.setInputDisabled(false);
+            wInput.placeholder = ''; hInput.placeholder = '';
         }
 
         modal.style.display = 'flex';
     }
 
-    // 📌 탭 변경 제어 로직 (URL 입력 시 크기 잠금 기능 포함)
+    // 📌 탭 변경 제어 로직 (버그 수정 반영)
     switchTab(sourceType) {
         this.modalState.source = sourceType;
         const btnFile = document.getElementById('tab-btn-file');
@@ -201,13 +202,18 @@ export class NoticeEditor {
             urlWrapper.style.display = 'none';
             
             if (!this.modalState.file) {
+                // 파일을 아직 선택하지 않았을 때: 잠금 유지 및 직관적인 안내 문구 부여
                 this.setInputDisabled(true);
                 wInput.value = ''; hInput.value = '';
+                wInput.placeholder = '파일 첨부 시 활성화';
+                hInput.placeholder = '파일 첨부 시 활성화';
             } else {
+                // 파일을 이미 선택한 상태로 돌아왔을 때: 잠금 완전 해제
                 this.setInputDisabled(false);
+                wInput.placeholder = ''; hInput.placeholder = '';
             }
         } else {
-            // URL 탭 선택 시: 크기 지정 잠금 및 안내 문구 표시
+            // URL 탭 선택 시: 강제 잠금 및 업로드 후 수정 안내
             btnUrl.style.background = '#fff'; btnUrl.style.color = '#1a73e8';
             btnFile.style.background = 'transparent'; btnFile.style.color = '#5f6368';
             fileWrapper.style.display = 'none';
@@ -226,9 +232,6 @@ export class NoticeEditor {
         w.disabled = disabled; h.disabled = disabled;
         w.style.background = disabled ? "#f1f3f4" : "#fff";
         h.style.background = disabled ? "#f1f3f4" : "#fff";
-        if (!disabled) {
-            w.placeholder = ''; h.placeholder = '';
-        }
     }
 
     initEvents() {
@@ -257,6 +260,7 @@ export class NoticeEditor {
                     this.modalState.ratio = img.width / img.height;
                     wInput.value = img.width; hInput.value = img.height;
                     this.setInputDisabled(false);
+                    wInput.placeholder = ''; hInput.placeholder = ''; // 잠금 문구 해제
                     URL.revokeObjectURL(fileUrl);
                 };
                 img.src = fileUrl;
@@ -266,6 +270,7 @@ export class NoticeEditor {
                     this.modalState.ratio = video.videoWidth / video.videoHeight;
                     wInput.value = video.videoWidth; hInput.value = video.videoHeight;
                     this.setInputDisabled(false);
+                    wInput.placeholder = ''; hInput.placeholder = ''; // 잠금 문구 해제
                     URL.revokeObjectURL(fileUrl);
                 };
                 video.src = fileUrl;
