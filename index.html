@@ -179,12 +179,15 @@
                     <h1 style="margin: 0;">상/벌점 관리</h1>
                 </div>
 
-                <div class="card penalty-notice">
-                    <h3 class="notice-title">📢 공지사항: 상/벌점 시스템 이용 안내</h3>
-                    <div class="notice-content">
-                        <p>이곳은 본인의 상점과 벌점을 스스로 기록하고 관리하는 공간입니다.</p>
-                        <p>허위 기재 시 불이익이 발생할 수 있으니, 선생님이 부여하신 점수를 정확히 기록해 주세요.</p>
+                <div class="global-section notice-box" style="border-left: 4px solid #d93025;">
+                    <div class="notice-header" id="notice-accordion-toggle">
+                        <div class="notice-summary">
+                            <span class="badge-notice">📢 공지</span>
+                            <span id="latest-notice-title" style="font-weight: 500; color: #333;">데이터를 불러오는 중...</span>
+                        </div>
+                        <button class="btn-toggle-arrow" id="arrow-icon">▼</button>
                     </div>
+                    <div class="notice-body collapsed" id="notice-list-container"></div>
                 </div>
 
                 <div class="penalty-grid">
@@ -222,24 +225,35 @@
 
                     <div class="penalty-right">
                         <div class="card">
-                            <h3>기록 내역</h3>
+                            <h3>나의 기록 내역</h3>
                             <div id="penalty-list" class="cl-list" style="max-height: 300px; overflow-y: auto;">
-                                </div>
+                            </div>
                         </div>
 
-                        <div class="card penalty-rules">
-                            <h3>⚠️ 벌점 누적에 따른 징계 기준</h3>
-                            <ul class="rule-list">
-                                <li><strong>-5점:</strong> 사감 선생님 면담 및 1차 경고</li>
-                                <li><strong>-10점:</strong> 부모님 연락 및 2차 경고</li>
-                                <li><strong>-15점:</strong> 교내 봉사 활동 5시간</li>
-                                <li><strong>-20점:</strong> 기숙사 1주일 퇴사 조치</li>
-                                <li><strong>-30점:</strong> 기숙사 영구 퇴사 조치</li>
-                            </ul>
+                        <div class="global-section discipline-box" style="background-color: #fce8e6; border: 1px solid #fad2cf;">
+                            <h3 style="color: #c5221f; margin-top: 0; margin-bottom: 15px;">⚠️ 벌점 누적에 따른 징계 기준</h3>
+                            <div id="discipline-list-container" class="cl-list">
+                                <ul class="rule-list">
+                                    <li><strong>-5점:</strong> 사감 선생님 면담 및 1차 경고</li>
+                                    <li><strong>-10점:</strong> 부모님 연락 및 2차 경고</li>
+                                    <li><strong>-15점:</strong> 교내 봉사 활동 5시간</li>
+                                    <li><strong>-20점:</strong> 기숙사 1주일 퇴사 조치</li>
+                                    <li><strong>-30점:</strong> 기숙사 영구 퇴사 조치</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div id="admin-panel" style="display: none;">
+                            <div class="card" style="border: 1px solid #3498db; background-color: #f0f7ff;">
+                                <h3 style="color: #2980b9; margin-top: 0;">🛠️ 관리자 전용 패널</h3>
+                                <p style="font-size: 13px; color: #555;">공지사항 및 징계 기준을 수정할 수 있습니다.</p>
+                                <button class="cl-btn-primary" style="width: 100%; margin-top: 10px;">관리자 설정 열기</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </section>
+            
             <section id="timeplan" class="tab-content"><h1>시간 계획</h1></section>
             <section id="eval" class="tab-content"><h1>과목 평가 계획</h1></section>
             
@@ -296,6 +310,17 @@
         document.getElementById('cl-modal-close-btn').addEventListener('click', () => {
             document.getElementById('classroom-modal').style.display = 'none';
         });
+
+        // 공지사항 아코디언 토글 로직
+        const accordionToggle = document.getElementById('notice-accordion-toggle');
+        if (accordionToggle) {
+            accordionToggle.addEventListener('click', () => {
+                const body = document.getElementById('notice-list-container');
+                const arrow = document.getElementById('arrow-icon');
+                body.classList.toggle('collapsed');
+                arrow.style.transform = body.classList.contains('collapsed') ? 'rotate(0deg)' : 'rotate(180deg)';
+            });
+        }
     </script>
 
     <script type="module" src="js/classroom.js"></script>
