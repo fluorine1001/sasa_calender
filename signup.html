@@ -18,7 +18,10 @@
 
         <div class="input-group">
             <label for="signup-nickname">사용할 닉네임</label>
-            <input type="text" id="signup-nickname" placeholder="시스템 내에서 사용할 이름">
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="signup-nickname" placeholder="시스템 내에서 사용할 이름" style="flex: 1;">
+                <button type="button" id="check-nickname-btn" class="btn-secondary" style="white-space: nowrap; padding: 0 15px; margin-top: 0;">중복 확인</button>
+            </div>
         </div>
 
         <div class="input-group">
@@ -31,6 +34,24 @@
             <input type="password" id="signup-pw-confirm" placeholder="비밀번호를 한 번 더 입력해주세요">
         </div>
 
+        <div class="input-group" style="margin-top: 15px; margin-bottom: 20px;">
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 12px; background: #fdfdfd;">
+                <div id="tos-toggle-btn" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-weight: bold; color: #2c3e50; font-size: 13px;">
+                    <span>📜 서비스 이용약관 (클릭하여 확인)</span>
+                    <span id="tos-arrow" style="transition: transform 0.2s; font-size: 11px;">▼</span>
+                </div>
+                
+                <div id="tos-content" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #eee; font-size: 12px; color: #7f8c8d; max-height: 150px; overflow-y: auto; line-height: 1.6; white-space: pre-wrap;">
+                    이용약관을 불러오는 중입니다...
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; margin-top: 12px;">
+                <input type="checkbox" id="agree-tos" style="width: auto; margin-right: 8px; cursor: pointer;">
+                <label for="agree-tos" style="font-size: 13px; color: #2c3e50; cursor: pointer; margin-bottom: 0; font-weight: bold;">(필수) 위 이용약관에 동의합니다.</label>
+            </div>
+        </div>
+
         <button id="signup-btn" class="btn-primary">가입하기</button>
 
         <div class="auth-links">
@@ -38,6 +59,6 @@
         </div>
     </div>
 
-    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/auth-guard.js"></script>
 </body>
 </html>
