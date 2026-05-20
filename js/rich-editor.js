@@ -5,7 +5,7 @@ export class NoticeEditor {
         this.callbacks = callbacks;
         this.quill = null;
         
-        // 💡 Cloudinary 설정 (비디오와 이미지를 모두 받기 위해 'auto' 사용)
+        // 💡 Cloudinary 설정 (이미지/비디오 공용 업로드를 위해 auto 사용)
         this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/djryl7blo/auto/upload"; 
         this.uploadPreset = "SASAcalender"; 
 
@@ -25,7 +25,7 @@ export class NoticeEditor {
         this.initEvents();
     }
 
-    // 📌 전역 UI (통합 모달창, 우클릭 메뉴)
+    // 📌 [요구사항 1, 2] 이미지/비디오 공용 사용 및 파일/링크 탭 분리 UI 렌더링
     renderGlobalUI() {
         if (document.getElementById('quill-custom-media-ui')) return;
 
@@ -33,44 +33,47 @@ export class NoticeEditor {
         uiWrapper.id = 'quill-custom-media-ui';
         uiWrapper.innerHTML = `
             <div id="quill-media-context-menu" style="display:none; position:fixed; background:#fff; border:1px solid #ccc; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius:4px; z-index:10000; padding:4px 0; font-size:13px; min-width:130px;">
-                <div id="menu-item-edit-media" style="padding:8px 12px; cursor:pointer; color:#333; transition: background 0.2s;">⚙️ 미디어 속성 변경</div>
+                <div id="menu-item-edit-media" style="padding:8px 12px; cursor:pointer; color:#333; transition: background 0.2s;">⚙️ 미디어 크기 변경</div>
             </div>
 
-            <div id="quill-media-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:10001; align-items:center; justify-content:center;">
-                <div style="background:#fff; padding:20px 24px; border-radius:8px; width:320px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-                    <h4 style="margin:0 0 15px 0; color:#1a73e8; font-size: 15px;" id="media-modal-title">🖼️ 미디어 업로드</h4>
+            <div id="quill-media-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:10001; align-items:center; justify-content:center; font-family:sans-serif;">
+                <div style="background:#fff; padding:24px; border-radius:12px; width:320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                    <h4 style="margin:0 0 15px 0; color:#1a73e8; font-size: 16px; text-align:center;" id="media-modal-title">🖼️ 미디어 설정</h4>
                     
-                    <div id="media-modal-source-section" style="margin-bottom: 12px; font-size:13px; display:flex; gap:15px;">
-                        <label style="cursor:pointer;"><input type="radio" name="media-source" value="file" checked> 직접 파일 업로드</label>
-                        <label style="cursor:pointer;"><input type="radio" name="media-source" value="url"> URL 링크 삽입</label>
+                    <div id="media-modal-tab-bar" style="display:flex; background:#f1f3f4; padding:4px; border-radius:8px; margin-bottom:16px;">
+                        <button type="button" id="tab-btn-file" style="flex:1; border:none; padding:8px; font-size:13px; font-weight:bold; border-radius:6px; cursor:pointer; background:#fff; color:#1a73e8; transition:all 0.2s;">📁 파일 업로드</button>
+                        <button type="button" id="tab-btn-url" style="flex:1; border:none; padding:8px; font-size:13px; font-weight:bold; border-radius:6px; cursor:pointer; background:transparent; color:#5f6368; transition:all 0.2s;">🔗 웹 링크 입력</button>
                     </div>
 
-                    <div id="media-modal-file-wrapper" style="margin-bottom: 15px;">
-                        <input type="file" id="media-modal-file-input" style="font-size:12px; width:100%; border:1px solid #ddd; padding:4px; border-radius:4px; background:#f9f9f9;">
+                    <div id="media-modal-file-wrapper" style="margin-bottom: 16px;">
+                        <label style="font-size:12px; color:#666; display:block; margin-bottom:6px; font-weight:bold;">로컬 파일 선택</label>
+                        <input type="file" id="media-modal-file-input" style="font-size:12px; width:100%; border:1px solid #ddd; padding:6px; border-radius:6px; background:#fafafa; box-sizing:border-box;">
                     </div>
 
-                    <div id="media-modal-url-wrapper" style="margin-bottom: 15px; display:none;">
-                        <input type="url" id="media-modal-url-input" placeholder="https://..." style="font-size:13px; width:100%; border:1px solid #ddd; padding:6px; border-radius:4px; box-sizing:border-box;">
+                    <div id="media-modal-url-wrapper" style="margin-bottom: 16px; display:none;">
+                        <label style="font-size:12px; color:#666; display:block; margin-bottom:6px; font-weight:bold;">인터넷 주소 (URL)</label>
+                        <input type="url" id="media-modal-url-input" placeholder="https://example.com/video.mp4" style="font-size:13px; width:100%; border:1px solid #ddd; padding:8px; border-radius:6px; box-sizing:border-box; outline:none;">
                     </div>
 
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <label style="font-size:13px; color:#555; font-weight:bold;">가로 (px)</label>
-                        <input type="number" id="media-modal-width" style="width:100px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:right;">
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <label style="font-size:13px; color:#555; font-weight:bold;">세로 (px)</label>
-                        <input type="number" id="media-modal-height" style="width:100px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:right;">
-                    </div>
-                    
-                    <div style="margin-bottom:20px; font-size:13px; color:#333;">
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
-                            <input type="checkbox" id="media-modal-lock" checked> 🔒 크기 비율 유지
-                        </label>
+                    <div style="background:#f8fafc; padding:12px; border-radius:8px; margin-bottom:16px; border:1px solid #edf2f7;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <label style="font-size:13px; color:#4a5568; font-weight:bold;">가로 크기 (px)</label>
+                            <input type="number" id="media-modal-width" style="width:90px; padding:6px; border:1px solid #cbd5e1; border-radius:4px; text-align:right;">
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <label style="font-size:13px; color:#4a5568; font-weight:bold;">세로 크기 (px)</label>
+                            <input type="number" id="media-modal-height" style="width:90px; padding:6px; border:1px solid #cbd5e1; border-radius:4px; text-align:right;">
+                        </div>
+                        <div style="font-size:12px; color:#4a5568; margin-top:6px;">
+                            <label style="cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none;">
+                                <input type="checkbox" id="media-modal-lock" checked> 🔒 종횡 비율 유지하기
+                            </label>
+                        </div>
                     </div>
                     
                     <div style="display:flex; justify-content:flex-end; gap:8px;">
-                        <button type="button" id="media-modal-cancel" style="padding:6px 12px; border:1px solid #ddd; background:#f9f9f9; color:#333; border-radius:4px; cursor:pointer; font-size:13px;">취소</button>
-                        <button type="button" id="media-modal-confirm" style="padding:6px 12px; border:none; background:#1a73e8; color:#fff; border-radius:4px; cursor:pointer; font-size:13px;">확인</button>
+                        <button type="button" id="media-modal-cancel" style="padding:8px 14px; border:1px solid #cbd5e1; background:#fff; color:#475569; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500;">취소</button>
+                        <button type="button" id="media-modal-confirm" style="padding:8px 14px; border:none; background:#1a73e8; color:#fff; border-radius:6px; cursor:pointer; font-size:13px; font-weight:bold;">적용하기</button>
                     </div>
                 </div>
             </div>
@@ -129,6 +132,7 @@ export class NoticeEditor {
                         ['link', 'image', 'video', 'clean']
                     ],
                     handlers: {
+                        // [요구사항 1] 이미지와 비디오 버튼 모두 같은 모달 컨텍스트를 호출함
                         image: () => this.openMediaModal('upload', 'image'),
                         video: () => this.openMediaModal('upload', 'video')
                     }
@@ -137,10 +141,8 @@ export class NoticeEditor {
         });
     }
 
-    // 📌 모달 열기 로직 (초기화)
+    // 📌 모달 초기 세팅 및 상태 관리 전환
     openMediaModal(mode, type, targetNode = null, width = '', height = '') {
-        if (this.cloudinaryUrl.includes("YOUR_CLOUD_NAME")) return alert("⚠️ Cloudinary 설정 정보를 입력해주세요!");
-        
         this.modalState.mode = mode;
         this.modalState.type = type;
         this.modalState.targetNode = targetNode;
@@ -148,72 +150,80 @@ export class NoticeEditor {
 
         const modal = document.getElementById('quill-media-modal');
         const title = document.getElementById('media-modal-title');
-        const sourceSection = document.getElementById('media-modal-source-section');
-        const fileWrapper = document.getElementById('media-modal-file-wrapper');
-        const urlWrapper = document.getElementById('media-modal-url-wrapper');
-        const fileInput = document.getElementById('media-modal-file-input');
-        const urlInput = document.getElementById('media-modal-url-input');
+        const tabBar = document.getElementById('media-modal-tab-bar');
         const wInput = document.getElementById('media-modal-width');
         const hInput = document.getElementById('media-modal-height');
+        const fileInput = document.getElementById('media-modal-file-input');
+        const urlInput = document.getElementById('media-modal-url-input');
         
-        const typeLabel = type === 'image' ? '이미지' : '동영상';
+        const label = type === 'image' ? '이미지' : '동영상';
 
         if (mode === 'upload') {
-            title.innerText = `[${typeLabel}] 파일 및 크기 지정`;
-            sourceSection.style.display = 'flex';
-            
-            // 기본값 설정: 비디오는 URL이 잦으므로 URL 우선, 이미지는 파일 우선
-            const radios = document.getElementsByName('media-source');
-            if (type === 'video') radios[1].checked = true;
-            else radios[0].checked = true;
-            
-            this.toggleSourceUI(); // UI 토글 실행
-
+            title.innerText = `🖼️ 새 ${label} 추가 옵션`;
+            tabBar.style.display = 'flex';
             fileInput.value = '';
-            fileInput.accept = type === 'image' ? 'image/*' : 'video/*';
             urlInput.value = '';
+            fileInput.accept = type === 'image' ? 'image/*' : 'video/*';
             
-            // 크기 기본값 (비디오 URL의 경우 기본 640x360 부여)
+            // 초기 탭 설정: 이미지는 파일 위주, 비디오는 웹 링크 위주 편의 분기
+            this.switchTab(type === 'video' ? 'url' : 'file');
+
             if (type === 'video') {
-                wInput.value = 640; hInput.value = 360;
-                this.modalState.ratio = 640/360;
-                wInput.disabled = false; hInput.disabled = false;
-                wInput.style.background = "#fff"; hInput.style.background = "#fff";
+                wInput.value = 640; hInput.value = 360; // 비디오 기본 규격 프리셋
+                this.modalState.ratio = 640 / 360;
+                this.setInputDisabled(false);
             } else {
                 wInput.value = ''; hInput.value = '';
-                wInput.disabled = true; hInput.disabled = true;
-                wInput.style.background = "#f1f3f4"; hInput.style.background = "#f1f3f4";
+                this.setInputDisabled(true); // 파일 선택 전엔 비활성화
             }
         } else {
-            // 속성 수정 모드
-            title.innerText = `⚙️ ${typeLabel} 속성 수정`;
-            sourceSection.style.display = 'none';
-            fileWrapper.style.display = 'none';
-            urlWrapper.style.display = 'none';
+            // [요구사항 3] 업로드 후 수정 모드
+            title.innerText = `⚙️ ${label} 크기 속성 수정`;
+            tabBar.style.display = 'none';
+            document.getElementById('media-modal-file-wrapper').style.display = 'none';
+            document.getElementById('media-modal-url-wrapper').style.display = 'none';
             
             wInput.value = Math.round(width);
             hInput.value = Math.round(height);
-            wInput.disabled = false; hInput.disabled = false;
-            wInput.style.background = "#fff"; hInput.style.background = "#fff";
+            this.setInputDisabled(false);
         }
 
         modal.style.display = 'flex';
     }
 
-    // 파일/URL UI 토글 함수
-    toggleSourceUI() {
-        const source = document.querySelector('input[name="media-source"]:checked').value;
-        this.modalState.source = source;
-        document.getElementById('media-modal-file-wrapper').style.display = source === 'file' ? 'block' : 'none';
-        document.getElementById('media-modal-url-wrapper').style.display = source === 'url' ? 'block' : 'none';
-        
-        // URL 모드로 전환시, 사용자가 타이핑하기 전이라도 크기를 입력할 수 있게 활성화
-        if (source === 'url') {
-            const wInput = document.getElementById('media-modal-width');
-            const hInput = document.getElementById('media-modal-height');
-            wInput.disabled = false; hInput.disabled = false;
-            wInput.style.background = "#fff"; hInput.style.background = "#fff";
+    // [요구사항 2] 탭 변경 제어 로직 (시각적 분리 완성)
+    switchTab(sourceType) {
+        this.modalState.source = sourceType;
+        const btnFile = document.getElementById('tab-btn-file');
+        const btnUrl = document.getElementById('tab-btn-url');
+        const fileWrapper = document.getElementById('media-modal-file-wrapper');
+        const urlWrapper = document.getElementById('media-modal-url-wrapper');
+        const wInput = document.getElementById('media-modal-width');
+        const hInput = document.getElementById('media-modal-height');
+
+        if (sourceType === 'file') {
+            btnFile.style.background = '#fff'; btnFile.style.color = '#1a73e8';
+            btnUrl.style.background = 'transparent'; btnUrl.style.color = '#5f6368';
+            fileWrapper.style.display = 'block';
+            urlWrapper.style.display = 'none';
+            
+            // 파일을 아직 안 골랐다면 크기 입력 잠금
+            if (!this.modalState.file) this.setInputDisabled(true);
+        } else {
+            btnUrl.style.background = '#fff'; btnUrl.style.color = '#1a73e8';
+            btnFile.style.background = 'transparent'; btnFile.style.color = '#5f6368';
+            fileWrapper.style.display = 'none';
+            urlWrapper.style.display = 'block';
+            this.setInputDisabled(false);
         }
+    }
+
+    setInputDisabled(disabled) {
+        const w = document.getElementById('media-modal-width');
+        const h = document.getElementById('media-modal-height');
+        w.disabled = disabled; h.disabled = disabled;
+        w.style.background = disabled ? "#f1f3f4" : "#fff";
+        h.style.background = disabled ? "#f1f3f4" : "#fff";
     }
 
     initEvents() {
@@ -224,12 +234,11 @@ export class NoticeEditor {
         const hInput = document.getElementById('media-modal-height');
         const lockBtn = document.getElementById('media-modal-lock');
 
-        // 라디오 버튼 변경 이벤트
-        document.getElementsByName('media-source').forEach(radio => {
-            radio.addEventListener('change', () => this.toggleSourceUI());
-        });
+        // 탭 버튼 클릭 이벤트 바인딩
+        document.getElementById('tab-btn-file').onclick = () => this.switchTab('file');
+        document.getElementById('tab-btn-url').onclick = () => this.switchTab('url');
 
-        // 📌 파일 선택 시 이미지/비디오 원본 해상도 추출 로직
+        // 📌 파일 감지 및 비동기 메타데이터 스캔 (업로드 전 크기 자동 계산용)
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -242,7 +251,7 @@ export class NoticeEditor {
                 img.onload = () => {
                     this.modalState.ratio = img.width / img.height;
                     wInput.value = img.width; hInput.value = img.height;
-                    this.enableSizeInputs(wInput, hInput);
+                    this.setInputDisabled(false);
                     URL.revokeObjectURL(fileUrl);
                 };
                 img.src = fileUrl;
@@ -251,14 +260,14 @@ export class NoticeEditor {
                 video.onloadedmetadata = () => {
                     this.modalState.ratio = video.videoWidth / video.videoHeight;
                     wInput.value = video.videoWidth; hInput.value = video.videoHeight;
-                    this.enableSizeInputs(wInput, hInput);
+                    this.setInputDisabled(false);
                     URL.revokeObjectURL(fileUrl);
                 };
                 video.src = fileUrl;
             }
         });
 
-        // 실시간 비율 계산
+        // 실시간 비율 계산 연동
         wInput.oninput = () => {
             if (lockBtn.checked && wInput.value && this.modalState.ratio) {
                 hInput.value = Math.round(wInput.value / this.modalState.ratio);
@@ -272,35 +281,37 @@ export class NoticeEditor {
 
         document.getElementById('media-modal-cancel').onclick = () => modal.style.display = 'none';
 
-        // 📌 모달 확인 버튼 (업로드/적용)
+        // 📌 모달 최종 승인 확인 로직
         document.getElementById('media-modal-confirm').onclick = async () => {
-            const reqWidth = wInput.value || 640;
-            const reqHeight = hInput.value || 360;
+            const reqWidth = wInput.value || (this.modalState.type === 'video' ? 640 : 400);
+            const reqHeight = hInput.value || (this.modalState.type === 'video' ? 360 : 300);
 
             if (this.modalState.mode === 'upload') {
                 if (this.modalState.source === 'file') {
-                    if (!this.modalState.file) return alert("파일을 먼저 선택해주세요.");
+                    if (!this.modalState.file) return alert("업로드할 미디어 파일을 골라주세요.");
                     modal.style.display = 'none';
                     await this.executeUpload(this.modalState.file, reqWidth, reqHeight);
                 } else {
                     const url = document.getElementById('media-modal-url-input').value.trim();
-                    if (!url) return alert("URL을 입력해주세요.");
+                    if (!url) return alert("올바른 미디어 URL 주소를 입력해 주세요.");
                     modal.style.display = 'none';
                     this.insertIntoQuill(this.formatVideoUrl(url), reqWidth, reqHeight);
                 }
             } else if (this.modalState.mode === 'edit' && this.modalState.targetNode) {
+                // [요구사항 3] 업로드 후 속성 변경 반영
                 modal.style.display = 'none';
-                this.modalState.targetNode.setAttribute('width', reqWidth);
-                this.modalState.targetNode.setAttribute('height', reqHeight);
-                this.modalState.targetNode.style.width = reqWidth + 'px';
-                this.modalState.targetNode.style.height = reqHeight + 'px';
+                const node = this.modalState.targetNode;
+                node.setAttribute('width', reqWidth);
+                node.setAttribute('height', reqHeight);
+                node.style.width = reqWidth + 'px';
+                node.style.height = reqHeight + 'px';
             }
         };
 
-        // 🖱️ 우클릭 방지 및 커스텀 메뉴 (IMG 및 IFRAME 대상)
+        // 🖱️ [요구사항 3] 업로드 후 우클릭 트리거 바인딩 (이미지 및 동영상 태그 전부 감지)
         const editorContent = this.container.querySelector('.ql-editor');
         editorContent.addEventListener('contextmenu', (e) => {
-            if (e.target.tagName === 'IMG' || e.target.tagName === 'IFRAME') {
+            if (['IMG', 'IFRAME', 'VIDEO'].includes(e.target.tagName)) {
                 e.preventDefault(); 
                 contextMenu.style.display = 'block';
                 contextMenu.style.left = e.clientX + 'px';
@@ -310,7 +321,6 @@ export class NoticeEditor {
             }
         });
 
-        // 우클릭 메뉴 클릭
         document.getElementById('menu-item-edit-media').onclick = () => {
             contextMenu.style.display = 'none';
             const node = this.modalState.targetNode;
@@ -324,7 +334,7 @@ export class NoticeEditor {
             if (!e.target.closest('#quill-media-context-menu')) contextMenu.style.display = 'none';
         });
 
-        // 제출 및 링크 UI 로직 (기존과 동일)
+        // (기존 서비스용 라텍스 및 폼 로직 유지)
         this.container.querySelector('#btn-add-link-row').addEventListener('click', () => this.addLinkRow());
         this.container.querySelector('#link-inputs-container').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-remove-link-row')) e.target.closest('.link-input-row').remove();
@@ -359,23 +369,22 @@ export class NoticeEditor {
         });
     }
 
-    enableSizeInputs(w, h) {
-        w.disabled = false; h.disabled = false;
-        w.style.background = "#fff"; h.style.background = "#fff";
-    }
-
-    // 📌 유튜브 일반 URL을 삽입용 Embed URL로 자동 변환해주는 편의 함수
+    // 📌 [요구사항 4] 비디오 주소 포맷 검증 및 자동재생 차단 제어 필터
     formatVideoUrl(url) {
         if (this.modalState.type !== 'video') return url;
+        
+        // 유튜브 파싱 및 처리
         const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
-        if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+        if (ytMatch) {
+            // autoplay=0 스크립트를 명시하여 자동재생 강제 차단, 컨트롤러 노출(controls=1) 보장
+            return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=0&controls=1&rel=0`;
+        }
         return url;
     }
 
-    // 📌 Cloudinary 업로드 실행
     async executeUpload(file, reqWidth, reqHeight) {
         const range = this.quill.getSelection() || { index: this.quill.getLength() };
-        this.quill.insertText(range.index, '[업로드 중...⏳]');
+        this.quill.insertText(range.index, '[미디어 전송 중...⏳]');
         
         const formData = new FormData();
         formData.append('file', file);
@@ -386,37 +395,45 @@ export class NoticeEditor {
             const result = await response.json();
 
             if (result.secure_url) {
-                this.quill.deleteText(range.index, '[업로드 중...⏳]'.length);
+                this.quill.deleteText(range.index, '[미디어 전송 중...⏳]'.length);
                 this.insertIntoQuill(result.secure_url, reqWidth, reqHeight, range.index);
             } else {
-                throw new Error('업로드 실패');
+                throw new Error('업로드 거부');
             }
         } catch (error) {
             console.error(error);
-            this.quill.deleteText(range.index, '[업로드 중...⏳]'.length);
-            alert("파일 업로드에 실패했습니다.");
+            this.quill.deleteText(range.index, '[미디어 전송 중...⏳]'.length);
+            alert("서버 업로드에 실패했습니다.");
         }
     }
 
-    // 📌 에디터 본문에 미디어 삽입 및 사이즈 강제 적용
+    // 📌 에디터 주입 및 커스텀 가로/세로 오버라이딩
     insertIntoQuill(url, width, height, insertIndex = null) {
         const range = insertIndex !== null ? { index: insertIndex } : (this.quill.getSelection() || { index: this.quill.getLength() });
-        const embedType = this.modalState.type; // 'image' or 'video'
+        const embedType = this.modalState.type; 
         
         this.quill.insertEmbed(range.index, embedType, url);
         
-        // DOM에 렌더링될 시간을 살짝 준 뒤 속성 부여
         setTimeout(() => {
-            const selector = embedType === 'image' ? `img[src="${url}"]` : `iframe[src="${url}"]`;
+            const selector = embedType === 'image' ? `img[src="${url}"]` : `iframe[src="${url}"], video`;
             const nodes = this.container.querySelectorAll(selector);
             if (nodes.length > 0) {
                 const targetNode = nodes[nodes.length - 1];
+                
+                // 기본 속성 주입
                 targetNode.setAttribute('width', width);
                 targetNode.setAttribute('height', height);
                 targetNode.style.width = width + 'px';
                 targetNode.style.height = height + 'px';
+
+                // [요구사항 4] 로컬 파일 수신 동영상의 자동재생 방지 및 컨트롤러 제어 바인딩
+                if (targetNode.tagName === 'VIDEO') {
+                    targetNode.removeAttribute('autoplay');
+                    targetNode.setAttribute('controls', 'true');
+                    targetNode.setAttribute('preload', 'metadata');
+                }
             }
-        }, 50);
+        }, 60);
 
         this.quill.setSelection(range.index + 1);
     }
