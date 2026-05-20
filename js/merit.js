@@ -5,8 +5,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
-// ❌ 파일 스토리지(Storage) 모듈 임포트 제거됨
-
 let currentUid = null;
 let isCurrentUserAdmin = false;
 let unsubscribeSnapshot = null;
@@ -152,7 +150,7 @@ async function checkAndLoadGlobalSettings() {
     });
 }
 
-// 📌 공지사항 렌더링 (아코디언, TeX, 첨부파일 링크)
+// 📌 공지사항 렌더링 (아코디언, TeX, 다중 첨부파일 링크)
 function renderNotices(notices) {
     const titleEl = document.getElementById('latest-notice-title');
     const listEl = document.getElementById('notice-list-container');
@@ -171,8 +169,31 @@ function renderNotices(notices) {
     } else {
         notices.slice().reverse().forEach((n, reversedIndex) => {
             const originalIndex = notices.length - 1 - reversedIndex;
-            const noticeObj = typeof n === 'string' ? { title: n, body: '', fileUrl: null, fileName: null } : n;
+            const noticeObj = typeof n === 'string' ? { title: n, body: '', files: [] } : n;
             
+            // 💡 과거 데이터(단일 링크) 호환성 처리
+            let files = noticeObj.files ? [...noticeObj.files] : [];
+            if (noticeObj.fileUrl && files.length === 0) {
+                files.push({ name: noticeObj.fileName, url: noticeObj.fileUrl });
+            }
+
+            let linksHtml = '';
+            if (files.length > 0) {
+                linksHtml = `
+                    <div style="margin-top:15px; padding: 12px; background:#e8f0fe; border-radius:6px;">
+                        <div style="font-weight:bold; font-size:12px; color:#1a73e8; margin-bottom:8px;">📎 첨부 자료</div>
+                        <ul style="margin: 0; padding-left: 20px; list-style-type: disc;">
+                `;
+                files.forEach(f => {
+                    linksHtml += `<li style="margin-bottom: 4px;">
+                        <a href="${f.url}" target="_blank" style="color:#1a73e8; text-decoration:none; font-weight:500;">
+                            ${f.name || '첨부 링크 열기'}
+                        </a>
+                    </li>`;
+                });
+                linksHtml += `</ul></div>`;
+            }
+
             html += `
                 <div class="notice-accordion-item" style="border-bottom: 1px solid #eee; display:flex; flex-direction:column;">
                     <div class="notice-title-bar" data-target="notice-body-${originalIndex}" style="display:flex; justify-content:space-between; align-items:center; padding: 12px 15px; cursor: pointer; transition: background 0.2s;">
@@ -185,30 +206,32 @@ function renderNotices(notices) {
                     </div>
                     <div id="notice-body-${originalIndex}" style="display:none; padding: 15px; background: #fafafa; border-top: 1px dashed #ddd; font-size: 13px; color: #555; line-height: 1.6;">
                         <div class="tex-content" style="white-space: pre-wrap;">${noticeObj.body || '본문 내용이 없습니다.'}</div>
-                        ${noticeObj.fileUrl ? `
-                            <div style="margin-top:10px; padding: 10px; background:#e8f0fe; border-radius:5px; display:inline-block;">
-                                🔗 <a href="${noticeObj.fileUrl}" target="_blank" style="color:#1a73e8; text-decoration:none; font-weight:bold;">${noticeObj.fileName || '첨부 링크 열기'}</a>
-                            </div>
-                        ` : ''}
+                        ${linksHtml}
                     </div>
                 </div>
             `;
         });
     }
 
-    // 💡 관리자용 폼: 파일 업로드 대신 '외부 링크' 입력으로 변경
+    // 💡 관리자용 폼: 동적으로 링크 입력칸 추가 가능
     if (isCurrentUserAdmin) {
         html += `
             <div style="padding: 15px; margin: 10px 15px; background: #fdfdfd; border: 1px dashed #ccc; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
                 <input type="text" id="new-notice-title" placeholder="새 공지사항 제목" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                 <textarea id="new-notice-body" placeholder="본문 내용 (TeX 수식 지원: $$수식$$ 또는 $수식$)" rows="3" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; resize:vertical;"></textarea>
                 
-                <div style="display:flex; gap: 10px; align-items:center;">
-                    <input type="text" id="new-notice-file-name" placeholder="링크 이름 (예: 안내문.pdf)" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; width: 30%;">
-                    <input type="url" id="new-notice-file-url" placeholder="첨부파일 링크 (구글 드라이브 등 URL)" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; flex:1;">
+                <div id="link-inputs-container" style="display:flex; flex-direction:column; gap:8px;">
+                    <div class="link-input-row" style="display:flex; gap: 10px; align-items:center;">
+                        <input type="text" class="new-notice-file-name" placeholder="링크 이름 (예: 안내문.pdf)" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; width: 30%;">
+                        <input type="url" class="new-notice-file-url" placeholder="첨부파일 링크 (구글 드라이브 등 URL)" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; flex:1;">
+                        <button type="button" class="btn-remove-link-row" style="background:none; border:none; cursor:pointer; color:#ccc; font-size:16px; flex-shrink:0;" disabled>✕</button>
+                    </div>
                 </div>
                 
-                <button id="btn-add-notice-complex" class="cl-btn-primary" style="padding: 8px 16px; margin-top: 4px;">공지 등록</button>
+                <div style="display:flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                    <button type="button" id="btn-add-link-row" style="background:none; border:1px solid #1a73e8; color:#1a73e8; border-radius:4px; padding:6px 12px; font-size:12px; cursor:pointer; transition: background 0.2s;">+ 링크 추가</button>
+                    <button id="btn-add-notice-complex" class="cl-btn-primary" style="padding: 8px 16px;">공지 등록</button>
+                </div>
             </div>
         `;
     }
@@ -259,11 +282,11 @@ function renderRules(rules) {
     listEl.innerHTML = html;
 }
 
-
 // ==========================================
 // 🖱️ 이벤트 리스너 (아코디언 토글 & 관리자 CRUD)
 // ==========================================
 document.addEventListener('click', async (e) => {
+    // 📌 아코디언 토글
     const titleBar = e.target.closest('.notice-title-bar');
     if (titleBar && !e.target.closest('button')) {
         const targetId = titleBar.getAttribute('data-target');
@@ -279,21 +302,56 @@ document.addEventListener('click', async (e) => {
     const target = e.target.closest('button');
     if (!target) return;
 
-    // 📌 새 공지사항 추가 (스토리지 없이 링크 저장 방식)
+    // 📌 링크 입력칸 동적 추가
+    if (target.id === 'btn-add-link-row') {
+        const container = document.getElementById('link-inputs-container');
+        if (container) {
+            const row = document.createElement('div');
+            row.className = 'link-input-row';
+            row.style.cssText = 'display:flex; gap: 10px; align-items:center;';
+            row.innerHTML = `
+                <input type="text" class="new-notice-file-name" placeholder="링크 이름" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; width: 30%;">
+                <input type="url" class="new-notice-file-url" placeholder="첨부파일 링크 (URL)" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; flex:1;">
+                <button type="button" class="btn-remove-link-row" style="background:none; border:none; cursor:pointer; color:#d93025; font-size:16px; flex-shrink:0;">✕</button>
+            `;
+            container.appendChild(row);
+        }
+        return;
+    }
+
+    // 📌 링크 입력칸 삭제
+    if (target.classList.contains('btn-remove-link-row')) {
+        const row = target.closest('.link-input-row');
+        if (row) row.remove();
+        return;
+    }
+
+    // 📌 새 공지사항 추가 (다중 링크 배열로 저장)
     if (target.id === 'btn-add-notice-complex') {
         const titleEl = document.getElementById('new-notice-title');
         const bodyEl = document.getElementById('new-notice-body');
-        const fileNameEl = document.getElementById('new-notice-file-name');
-        const fileUrlEl = document.getElementById('new-notice-file-url');
         
         const title = titleEl.value.trim();
         const body = bodyEl.value.trim();
-        const fileUrl = fileUrlEl.value.trim();
-        let fileName = fileNameEl.value.trim();
 
         if (!title) return alert("공지사항 제목을 입력해주세요.");
-        if (fileUrl && !fileName) fileName = '첨부 링크 열기'; // URL은 있는데 이름이 없으면 기본값 세팅
         
+        // 입력된 링크 데이터 수집
+        const fileRows = document.querySelectorAll('.link-input-row');
+        let filesArray = [];
+        
+        fileRows.forEach(row => {
+            const name = row.querySelector('.new-notice-file-name').value.trim();
+            const url = row.querySelector('.new-notice-file-url').value.trim();
+            
+            if (url) {
+                filesArray.push({
+                    name: name || '첨부 링크 열기',
+                    url: url
+                });
+            }
+        });
+
         target.innerText = "업로드 중...";
         target.disabled = true;
 
@@ -301,8 +359,7 @@ document.addEventListener('click', async (e) => {
             const newNoticeObj = {
                 title: title,
                 body: body,
-                fileUrl: fileUrl || null,
-                fileName: fileName || null,
+                files: filesArray, // 다중 파일 배열
                 createdAt: new Date().toISOString()
             };
 
