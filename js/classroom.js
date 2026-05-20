@@ -226,7 +226,7 @@ async function loadCourses() {
                 <span class="cl-course-name">${course.name}</span>
                 <span class="cl-arrow">❯</span>
             `;
-            item.onclick = () => loadAssignments(course.id, accessToken);
+            item.onclick = () => loadAssignments(course.id, course.name, accessToken);
             listContainer.appendChild(item);
         });
 
@@ -239,7 +239,7 @@ async function loadCourses() {
 /**
  * 2. 선택한 수업의 과제(CourseWork) 불러오기
  */
-async function loadAssignments(courseId, token) {
+async function loadAssignments(courseId, courseName, token) {
     const modalBody = document.getElementById('classroom-modal-body');
     modalBody.innerHTML = '<div class="cl-spinner"></div><p style="text-align:center; margin-top:10px;">과제를 불러오는 중...</p>';
 
@@ -266,11 +266,23 @@ async function loadAssignments(courseId, token) {
         document.getElementById('btn-back-to-courses').onclick = loadCourses;
 
         data.courseWork.forEach(work => {
-            const dateStr = work.dueDate ? `${work.dueDate.year}-${work.dueDate.month}-${work.dueDate.day}` : '기한 없음';
+            // 정렬을 위해 월, 일을 01, 02 형식으로 패딩 처리
+            const dateStr = work.dueDate 
+                ? `${work.dueDate.year}-${String(work.dueDate.month).padStart(2, '0')}-${String(work.dueDate.day).padStart(2, '0')}` 
+                : '기한 없음';
+            
+            const taskData = {
+                id: work.id,
+                courseName: courseName,
+                title: work.title,
+                dueDate: dateStr,
+                link: work.alternateLink
+            };
+
             const item = document.createElement('label');
             item.className = 'cl-list-item cl-checkable';
             item.innerHTML = `
-                <input type="checkbox" class="cl-checkbox" data-work='${JSON.stringify({title: work.title, dueDate: dateStr, link: work.alternateLink}).replace(/'/g, "&apos;")}'>
+                <input type="checkbox" class="cl-checkbox" data-work='${JSON.stringify(taskData).replace(/'/g, "&apos;")}'>
                 <div class="cl-work-info">
                     <span class="cl-work-title">${work.title}</span>
                     <span class="cl-work-due">마감: ${dateStr}</span>
@@ -298,11 +310,11 @@ async function loadAssignments(courseId, token) {
 async function saveAssignmentsToFirestore(assignments) {
     try {
         const tasksRef = collection(db, `users/${currentUid}/tasks`);
-        const promises = assignments.map(task => addDoc(tasksRef, {
+        const promises = assignments.map(task => setDoc(doc(tasksRef, `google_${task.id}`), {
             ...task,
             status: 'todo',
             createdAt: serverTimestamp()
-        }));
+        }, { merge: true }));
         
         await Promise.all(promises);
         alert(`${assignments.length}개의 과제를 '과제/공지' 탭에 저장했습니다!`);
@@ -335,31 +347,62 @@ function subscribeTasks() {
             return;
         }
 
-        listContainer.innerHTML = '';
+        // 1. 데이터를 과목별로 그룹화
+        const groups = {};
         snapshot.forEach((docSnap) => {
-            const task = docSnap.data();
-            const taskId = docSnap.id;
+            const data = docSnap.data();
+            const task = { id: docSnap.id, ...data };
+            if (!groups[task.courseName]) groups[task.courseName] = [];
+            groups[task.courseName].push(task);
+        });
 
-            const item = document.createElement('div');
-            item.className = 'cl-list-item';
-            item.style.cursor = 'default'; // 리스트 자체 클릭은 무효화
-            item.innerHTML = `
-                <div class="cl-work-info">
-                    <span class="cl-work-title">${task.title}</span>
-                    <span class="cl-work-due">마감일: ${task.dueDate}</span>
-                </div>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <a href="${task.link}" target="_blank" class="cl-btn-primary" style="text-decoration:none; font-size:12px; padding:6px 12px;">열기</a>
-                    <button class="btn-delete-task" data-id="${taskId}" style="background:none; border:none; cursor:pointer; font-size:16px;">🗑️</button>
-                </div>
+        listContainer.innerHTML = '';
+
+        // 2. 과목 이름을 기준으로 정렬하여 렌더링
+        Object.keys(groups).sort().forEach(courseName => {
+            const groupSection = document.createElement('div');
+            groupSection.className = 'cl-course-group';
+            
+            groupSection.innerHTML = `
+                <div class="cl-course-header">${courseName}</div>
+                <div class="cl-list"></div>
             `;
+            
+            const subList = groupSection.querySelector('.cl-list');
+            
+            // 3. 과목 내 과제를 마감일 내림차순(최신순)으로 정렬 (기한 없음은 맨 뒤로)
+            const sortedTasks = groups[courseName].sort((a, b) => {
+                if (a.dueDate === '기한 없음') return 1;
+                if (b.dueDate === '기한 없음') return -1;
+                return b.dueDate.localeCompare(a.dueDate); // 내림차순 정렬로 변경
+            });
 
-            item.querySelector('.btn-delete-task').onclick = async () => {
-                if (confirm("이 과제를 목록에서 삭제하시겠습니까?")) {
-                    await deleteDoc(doc(db, `users/${currentUid}/tasks/${taskId}`));
-                }
-            };
-            listContainer.appendChild(item);
+            sortedTasks.forEach(task => {
+                const item = document.createElement('div');
+                item.className = 'cl-list-item';
+                item.style.cursor = 'default';
+                item.innerHTML = `
+                    <div class="cl-work-info">
+                        <span class="cl-work-title">${task.title}</span>
+                        <span class="cl-work-due" style="color: ${task.dueDate === '기한 없음' ? '#aaa' : '#e67e22'}">
+                            📅 마감: ${task.dueDate}
+                        </span>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <a href="${task.link}" target="_blank" class="cl-btn-primary" style="text-decoration:none; font-size:12px; padding:6px 12px;">클래스룸 열기</a>
+                        <button class="btn-delete-task" data-id="${task.id}" style="background:none; border:none; cursor:pointer; font-size:16px;">🗑️</button>
+                    </div>
+                `;
+
+                item.querySelector('.btn-delete-task').onclick = async () => {
+                    if (confirm("이 과제를 목록에서 삭제하시겠습니까?")) {
+                        await deleteDoc(doc(db, `users/${currentUid}/tasks/${task.id}`));
+                    }
+                };
+                subList.appendChild(item);
+            });
+
+            listContainer.appendChild(groupSection);
         });
     }, (error) => {
         // [추가] 에러 핸들러: 권한 문제 등이 발생하면 여기서 잡힙니다.
