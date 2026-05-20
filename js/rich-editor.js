@@ -5,16 +5,64 @@ export class NoticeEditor {
         this.callbacks = callbacks;
         this.quill = null;
         
-        // 💡 Cloudinary 설정 부분 (가입 후 본인의 정보로 변경해야 합니다)
-        // YOUR_CLOUD_NAME 부분에 Cloudinary 클라우드 이름을 넣으세요.
-        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/djryl7blo/image/upload"; 
-        
-        // Settings > Upload > Upload presets에서 생성한 'Unsigned' 프리셋 이름을 넣으세요.
-        this.uploadPreset = "SASAcalender"; 
+        // 💡 Cloudinary 설정 부분 (가입 후 본인의 정보로 변경)
+        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/image/upload"; 
+        this.uploadPreset = "YOUR_UNSIGNED_PRESET"; 
 
+        // 이미지 리사이징 모달 및 우클릭 메뉴 관련 상태 변수
+        this.imgModalState = {
+            mode: 'upload', // 'upload' 또는 'edit'
+            file: null,     // 업로드 대기 중인 파일
+            targetImgNode: null, // 우클릭으로 선택한 이미지 DOM 노드
+            ratio: 1        // 원본 이미지의 가로/세로 비율
+        };
+
+        this.renderGlobalUI(); // 모달과 우클릭 메뉴를 body에 추가
         this.renderUI();
         this.initQuill();
         this.initEvents();
+    }
+
+    // 📌 전역 UI (모달창, 컨텍스트 메뉴) 렌더링 - 중복 생성 방지
+    renderGlobalUI() {
+        if (document.getElementById('quill-custom-img-ui')) return;
+
+        const uiWrapper = document.createElement('div');
+        uiWrapper.id = 'quill-custom-img-ui';
+        uiWrapper.innerHTML = `
+            <div id="quill-img-context-menu" style="display:none; position:fixed; background:#fff; border:1px solid #ccc; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius:4px; z-index:10000; padding:4px 0; font-size:13px; min-width:130px;">
+                <div id="menu-item-edit-img" style="padding:8px 12px; cursor:pointer; color:#333; transition: background 0.2s;">⚙️ 이미지 속성 변경</div>
+            </div>
+
+            <div id="quill-img-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:10001; align-items:center; justify-content:center;">
+                <div style="background:#fff; padding:20px 24px; border-radius:8px; width:280px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                    <h4 style="margin:0 0 15px 0; color:#1a73e8; font-size: 15px;" id="img-modal-title">🖼️ 이미지 업로드 옵션</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <label style="font-size:13px; color:#555; font-weight:bold;">가로 (px)</label>
+                        <input type="number" id="img-modal-width" style="width:100px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:right;">
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <label style="font-size:13px; color:#555; font-weight:bold;">세로 (px)</label>
+                        <input type="number" id="img-modal-height" style="width:100px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:right;">
+                    </div>
+                    <div style="margin-bottom:20px; font-size:13px; color:#333;">
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="img-modal-lock" checked> 🔒 크기 비율 유지
+                        </label>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:8px;">
+                        <button type="button" id="img-modal-cancel" style="padding:6px 12px; border:1px solid #ddd; background:#f9f9f9; color:#333; border-radius:4px; cursor:pointer; font-size:13px;">취소</button>
+                        <button type="button" id="img-modal-confirm" style="padding:6px 12px; border:none; background:#1a73e8; color:#fff; border-radius:4px; cursor:pointer; font-size:13px;">확인</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(uiWrapper);
+
+        // 컨텍스트 메뉴 호버 이펙트
+        const menuBtn = document.getElementById('menu-item-edit-img');
+        menuBtn.onmouseover = () => menuBtn.style.background = '#f1f3f4';
+        menuBtn.onmouseout = () => menuBtn.style.background = '#fff';
     }
 
     // 📌 에디터 UI 렌더링
@@ -28,14 +76,6 @@ export class NoticeEditor {
                 <div id="new-notice-editor" style="height: 250px; font-size: 14px;"></div>
             </div>
             
-            <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; margin-top: 4px;">
-                <div id="latex-guide-toggle" style="background: #f8fafc; padding: 8px 12px; font-size: 13px; font-weight: bold; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-                    <span>📐 LaTeX 수식 작성 문법 가이드 보기</span>
-                    <span id="latex-guide-arrow" style="transition: transform 0.2s;">▶</span>
-                </div>
-                <div id="latex-guide-content" style="display: none; padding: 12px; background: #ffffff; font-size: 13px; border-top: 1px solid #e2e8f0; line-height: 1.6; max-height: 250px; overflow-y: auto;"></div>
-            </div>
-            
             <div style="font-weight:bold; font-size:12px; color:#555; margin-top:10px;">📎 파일 / 링크 첨부 (다중 지원)</div>
             <div id="link-inputs-container" style="display:flex; flex-direction:column; gap:8px;"></div>
             
@@ -43,14 +83,13 @@ export class NoticeEditor {
                 <button type="button" id="btn-add-link-row" style="background:none; border:1px solid #5f6368; color:#5f6368; border-radius:4px; padding:6px 12px; font-size:12px; cursor:pointer;">+ 링크 입력칸 추가</button>
                 <div style="display:flex; gap:10px;">
                     <button type="button" id="btn-cancel-edit" style="display:none; background:#f1f3f4; color:#333; border:none; border-radius:4px; padding: 8px 16px; cursor:pointer;">수정 취소</button>
-                    <button id="btn-submit-notice" class="cl-btn-primary" style="padding: 8px 16px; cursor:pointer;">공지 등록</button>
+                    <button id="btn-submit-notice" class="cl-btn-primary" style="padding: 8px 16px; cursor:pointer; background:#1a73e8; color:white; border:none; border-radius:4px;">공지 등록</button>
                 </div>
             </div>
         `;
         this.addLinkRow();
     }
 
-    // 📌 Quill 에디터 초기화
     initQuill() {
         if (!window.Quill) return;
         this.quill = new Quill('#new-notice-editor', {
@@ -66,123 +105,139 @@ export class NoticeEditor {
                         ['link', 'image', 'video', 'clean']
                     ],
                     handlers: {
-                        image: this.imageUploadHandler.bind(this), // 💡 Cloudinary 핸들러 연결
-                        video: this.videoEmbedHandler.bind(this)
+                        image: this.imageUploadHandler.bind(this)
                     }
                 }
             }
         });
     }
 
-    // 📌 🖼️ [핵심 로직] Cloudinary 이미지 업로드 핸들러
-    async imageUploadHandler() {
-        if (this.cloudinaryUrl.includes("YOUR_CLOUD_NAME") || this.uploadPreset === "YOUR_UNSIGNED_PRESET") {
-            alert("⚠️ 코드 상단에 Cloudinary 클라우드 이름과 업로드 프리셋을 먼저 설정해주세요!");
-            return;
-        }
+    // 📌 1단계: 에디터 툴바에서 이미지 아이콘 클릭 시
+    imageUploadHandler() {
+        if (this.cloudinaryUrl.includes("YOUR_CLOUD_NAME")) return alert("⚠️ Cloudinary 설정 정보를 입력해주세요!");
 
         const input = document.createElement('input');
         input.setAttribute('type', 'file');
         input.setAttribute('accept', 'image/*');
         input.click();
 
-        input.onchange = async () => {
+        input.onchange = () => {
             const file = input.files[0];
             if (!file) return;
 
-            const range = this.quill.getSelection() || { index: this.quill.getLength() };
-            this.quill.insertText(range.index, '[이미지 업로드 중...⏳]');
-            
-            // Cloudinary API 전송을 위한 FormData 객체 생성
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('upload_preset', this.uploadPreset); // Unsigned 업로드 권한 인증용
-
-            try {
-                // Cloudinary 업로드 API 호출
-                const response = await fetch(this.cloudinaryUrl, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (result.secure_url) {
-                    const downloadURL = result.secure_url; // https 로 시작하는 안전한 이미지 URL
-                    
-                    // 임시 텍스트 지우고 이미지 삽입
-                    this.quill.deleteText(range.index, '[이미지 업로드 중...⏳]'.length);
-                    this.quill.insertEmbed(range.index, 'image', downloadURL);
-                    this.quill.setSelection(range.index + 1);
-                } else {
-                    throw new Error(result.error?.message || '업로드 실패');
-                }
-            } catch (error) {
-                console.error("Cloudinary 업로드 실패:", error);
-                this.quill.deleteText(range.index, '[이미지 업로드 중...⏳]'.length);
-                alert("이미지 업로드에 실패했습니다. 설정 정보나 네트워크를 확인하세요.");
-            }
+            // 브라우저에서 이미지 원본 크기(해상도)를 미리 읽어오기
+            const imgUrl = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+                this.imgModalState.ratio = img.width / img.height;
+                this.openImgModal('upload', file, img.width, img.height, null);
+                URL.revokeObjectURL(imgUrl);
+            };
+            img.src = imgUrl;
         };
     }
 
-    // 📌 동영상 링크 삽입 처리
-    videoEmbedHandler() {
-        const url = prompt("YouTube / Vimeo '공유 주소' 또는 일반 MP4 영상 주소를 입력하세요:");
-        if (!url) return;
+    // 📌 2단계: 크기 설정 모달 열기 및 비율 유지 로직
+    openImgModal(mode, file, width, height, targetNode) {
+        this.imgModalState.mode = mode;
+        this.imgModalState.file = file;
+        this.imgModalState.targetImgNode = targetNode;
 
-        const range = this.quill.getSelection() || { index: this.quill.getLength() };
-        this.quill.insertEmbed(range.index, 'video', url);
-        this.quill.setSelection(range.index + 1);
+        const modal = document.getElementById('quill-img-modal');
+        const title = document.getElementById('img-modal-title');
+        const wInput = document.getElementById('img-modal-width');
+        const hInput = document.getElementById('img-modal-height');
+        const lockBtn = document.getElementById('img-modal-lock');
+        
+        title.innerText = mode === 'upload' ? '🖼️ 이미지 업로드 옵션' : '⚙️ 이미지 속성 수정';
+        wInput.value = Math.round(width);
+        hInput.value = Math.round(height);
+        
+        // 실시간 비율 계산 이벤트 등록
+        wInput.oninput = () => {
+            if (lockBtn.checked && wInput.value) {
+                hInput.value = Math.round(wInput.value / this.imgModalState.ratio);
+            }
+        };
+        hInput.oninput = () => {
+            if (lockBtn.checked && hInput.value) {
+                wInput.value = Math.round(hInput.value * this.imgModalState.ratio);
+            }
+        };
+
+        modal.style.display = 'flex';
     }
 
-    // 📌 기본 이벤트 및 구조 제어 (기존과 동일)
+    // 📌 이벤트 리스너 통합 초기화
     initEvents() {
-        const guideToggle = this.container.querySelector('#latex-guide-toggle');
-        guideToggle.addEventListener('click', () => {
-            const content = this.container.querySelector('#latex-guide-content');
-            const arrow = this.container.querySelector('#latex-guide-arrow');
-            if (content.style.display === 'none') {
-                if (content.innerHTML.trim() === "") {
-                    let html = `<p style="margin-top:0; font-weight: 500; color:#2563eb;">💡 아래 문법을 본문에 입력하면 수식으로 자동 변환됩니다.</p>`;
-                    this.latexGuide.forEach(cat => {
-                        html += `<h4 style="margin:12px 0 6px 0; color:#1e293b;">📌 ${cat.category}</h4>`;
-                        html += `<table style="width:100%; border-collapse:collapse; text-align:left; font-size:12px; margin-bottom:10px;">
-                                    <thead>
-                                        <tr style="background:#f1f5f9; border-bottom: 2px solid #cbd5e1;">
-                                            <th style="padding:6px; width:25%;">설명</th>
-                                            <th style="padding:6px; width:45%;">문법 입력</th>
-                                            <th style="padding:6px; width:30%;">미리보기</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>`;
-                        cat.inputs.forEach(item => {
-                            const safeSyntax = item.syntax.replace(/\\/g, '\\\\');
-                            html += `<tr style="border-bottom:1px solid #e2e8f0;">
-                                        <td style="padding:6px; font-weight:bold; color:#475569;">${item.desc}</td>
-                                        <td style="padding:6px;"><code style="background:#f1f5f9; padding:2px 4px; border-radius:3px; font-family:monospace; color:#ef4444;">${safeSyntax}</code></td>
-                                        <td style="padding:6px;">${item.example}</td>
-                                     </tr>`;
-                        });
-                        html += `</tbody></table>`;
-                    });
-                    content.innerHTML = html;
-                    if (window.renderMathInElement) {
-                        window.renderMathInElement(content, { delimiters: [{left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false}] });
-                    }
-                }
-                content.style.display = 'block';
-                arrow.style.transform = 'rotate(90deg)';
-            } else {
-                content.style.display = 'none';
-                arrow.style.transform = 'rotate(0deg)';
+        const modal = document.getElementById('quill-img-modal');
+        const contextMenu = document.getElementById('quill-img-context-menu');
+        const wInput = document.getElementById('img-modal-width');
+        const hInput = document.getElementById('img-modal-height');
+
+        // 모달창 취소 버튼
+        document.getElementById('img-modal-cancel').onclick = () => {
+            modal.style.display = 'none';
+        };
+
+        // 모달창 확인 (업로드 또는 수정 실행)
+        document.getElementById('img-modal-confirm').onclick = async () => {
+            modal.style.display = 'none';
+            const reqWidth = wInput.value;
+            const reqHeight = hInput.value;
+
+            if (this.imgModalState.mode === 'upload') {
+                await this.executeCloudinaryUpload(reqWidth, reqHeight);
+            } else if (this.imgModalState.mode === 'edit' && this.imgModalState.targetImgNode) {
+                // 우클릭 수정 모드: HTML 속성만 덮어씌움
+                this.imgModalState.targetImgNode.setAttribute('width', reqWidth);
+                this.imgModalState.targetImgNode.setAttribute('height', reqHeight);
+                this.imgModalState.targetImgNode.style.width = reqWidth + 'px';
+                this.imgModalState.targetImgNode.style.height = reqHeight + 'px';
+            }
+        };
+
+        // 🖱️ 에디터 내부 우클릭 방지 및 커스텀 컨텍스트 메뉴 표시 로직
+        const editorContent = this.container.querySelector('.ql-editor');
+        editorContent.addEventListener('contextmenu', (e) => {
+            // 클릭한 대상이 이미지(IMG)일 때만 작동
+            if (e.target.tagName === 'IMG') {
+                e.preventDefault(); // 기본 브라우저 우클릭 메뉴 숨김
+                
+                // 마우스 포인터 위치에 커스텀 메뉴 띄우기
+                contextMenu.style.display = 'block';
+                contextMenu.style.left = e.clientX + 'px';
+                contextMenu.style.top = e.clientY + 'px';
+                
+                // 현재 클릭한 이미지의 정보를 상태에 저장
+                this.imgModalState.targetImgNode = e.target;
             }
         });
 
+        // 우클릭 메뉴의 '이미지 속성 변경' 클릭 시
+        document.getElementById('menu-item-edit-img').onclick = () => {
+            contextMenu.style.display = 'none';
+            const imgNode = this.imgModalState.targetImgNode;
+            
+            // 현재 화면에 지정된 크기 또는 원본 크기 추출
+            const currentW = parseFloat(imgNode.getAttribute('width') || imgNode.style.width || imgNode.clientWidth);
+            const currentH = parseFloat(imgNode.getAttribute('height') || imgNode.style.height || imgNode.clientHeight);
+            
+            this.imgModalState.ratio = currentW / currentH; // 현재 비율 기반으로 락킹
+            this.openImgModal('edit', null, currentW, currentH, imgNode);
+        };
+
+        // 화면 빈 곳 클릭 시 우클릭 메뉴 닫기
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#quill-img-context-menu')) {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        // (기존) 첨부파일 링크 및 제출 버튼 로직 유지
         this.container.querySelector('#btn-add-link-row').addEventListener('click', () => this.addLinkRow());
         this.container.querySelector('#link-inputs-container').addEventListener('click', (e) => {
-            if (e.target.classList.contains('btn-remove-link-row')) {
-                e.target.closest('.link-input-row').remove();
-            }
+            if (e.target.classList.contains('btn-remove-link-row')) e.target.closest('.link-input-row').remove();
         });
 
         this.container.querySelector('#btn-cancel-edit').addEventListener('click', () => {
@@ -205,19 +260,59 @@ export class NoticeEditor {
 
             e.target.innerText = "저장 중...";
             e.target.disabled = true;
-            
             try {
-                if (this.callbacks.onSubmit) {
-                    await this.callbacks.onSubmit({ title, bodyHtml, files: filesArray });
-                }
+                if (this.callbacks.onSubmit) await this.callbacks.onSubmit({ title, bodyHtml, files: filesArray });
                 this.reset();
             } catch (err) {
                 console.error(err);
                 alert("공지사항 저장 중 실패가 발생했습니다.");
             } finally {
+                e.target.innerText = "공지 등록";
                 e.target.disabled = false;
             }
         });
+    }
+
+    // 📌 3단계: 실제 Cloudinary 업로드 및 사이즈 적용
+    async executeCloudinaryUpload(reqWidth, reqHeight) {
+        const range = this.quill.getSelection() || { index: this.quill.getLength() };
+        this.quill.insertText(range.index, '[이미지 업로드 중...⏳]');
+        
+        const formData = new FormData();
+        formData.append('file', this.imgModalState.file);
+        formData.append('upload_preset', this.uploadPreset);
+
+        try {
+            const response = await fetch(this.cloudinaryUrl, { method: 'POST', body: formData });
+            const result = await response.json();
+
+            if (result.secure_url) {
+                this.quill.deleteText(range.index, '[이미지 업로드 중...⏳]'.length);
+                
+                // Quill 에디터에 이미지 삽입
+                this.quill.insertEmbed(range.index, 'image', result.secure_url);
+                
+                // 💡 핵심: 삽입 직후 에디터 내의 해당 이미지를 찾아 HTML width/height 속성 강제 주입
+                setTimeout(() => {
+                    const imgs = this.container.querySelectorAll(`img[src="${result.secure_url}"]`);
+                    if (imgs.length > 0) {
+                        const targetImg = imgs[imgs.length - 1]; // 방금 삽입된 이미지
+                        targetImg.setAttribute('width', reqWidth);
+                        targetImg.setAttribute('height', reqHeight);
+                        targetImg.style.width = reqWidth + 'px';
+                        targetImg.style.height = reqHeight + 'px';
+                    }
+                }, 50);
+
+                this.quill.setSelection(range.index + 1);
+            } else {
+                throw new Error('업로드 실패');
+            }
+        } catch (error) {
+            console.error(error);
+            this.quill.deleteText(range.index, '[이미지 업로드 중...⏳]'.length);
+            alert("이미지 업로드에 실패했습니다.");
+        }
     }
 
     addLinkRow(name = '', url = '') {
@@ -234,26 +329,16 @@ export class NoticeEditor {
     }
 
     setData(title, body, files) {
-        this.container.querySelector('#admin-form-title').innerText = "🔄 공지사항 수정 중...";
         this.container.querySelector('#new-notice-title').value = title;
-        this.container.querySelector('#btn-submit-notice').innerText = "수정 완료";
-        this.container.querySelector('#btn-cancel-edit').style.display = "block";
         if (this.quill) this.quill.clipboard.dangerouslyPasteHTML(body || '');
-        
         const linkContainer = this.container.querySelector('#link-inputs-container');
         linkContainer.innerHTML = '';
-        if (files && files.length > 0) {
-            files.forEach(f => this.addLinkRow(f.name, f.url));
-        } else {
-            this.addLinkRow();
-        }
+        if (files && files.length > 0) files.forEach(f => this.addLinkRow(f.name, f.url));
+        else this.addLinkRow();
     }
 
     reset() {
-        this.container.querySelector('#admin-form-title').innerText = "📝 새 공지사항 작성";
         this.container.querySelector('#new-notice-title').value = '';
-        this.container.querySelector('#btn-submit-notice').innerText = "공지 등록";
-        this.container.querySelector('#btn-cancel-edit').style.display = "none";
         if (this.quill) this.quill.setContents([]);
         this.container.querySelector('#link-inputs-container').innerHTML = '';
         this.addLinkRow();
