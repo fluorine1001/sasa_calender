@@ -1,3 +1,4 @@
+// js/merit.js
 import { db } from './firebase-init.js';
 import { 
     collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, serverTimestamp, 
@@ -8,34 +9,39 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 let currentUid = null;
 let unsubscribeSnapshot = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. 점수 추가 폼 이벤트 연결
-    const form = document.getElementById('penalty-form');
-    if (form) {
-        form.addEventListener('submit', handleAddPenalty);
-    }
+// ==========================================
+// 🚀 초기화 및 이벤트 연결 (DOMContentLoaded 제거)
+// ==========================================
 
-    // 2. Firebase 로그인 상태 확인 후 데이터 로드
-    const auth = getAuth();
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            currentUid = user.uid;
-            loadPenaltyData();      // 유저 개인의 상벌점 내역 불러오기
-            loadGlobalSettings();   // 전역 공지사항 및 징계 기준 불러오기
-        } else {
-            currentUid = null;
-            if (unsubscribeSnapshot) unsubscribeSnapshot();
-            document.getElementById('penalty-list').innerHTML = '';
-            document.getElementById('total-score').innerText = '0';
-        }
-    });
+// 1. 점수 추가 폼 이벤트 연결
+const form = document.getElementById('penalty-form');
+if (form) {
+    form.addEventListener('submit', handleAddPenalty);
+}
 
-    // 3. 관리자 전용 패널 버튼 동작 연결
-    const adminBtn = document.getElementById('btn-open-admin');
-    if (adminBtn) {
-        adminBtn.addEventListener('click', handleAdminAction);
+// 2. Firebase 로그인 상태 확인 후 데이터 로드
+const auth = getAuth();
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        currentUid = user.uid;
+        loadPenaltyData();      // 유저 개인의 상벌점 내역 불러오기
+        loadGlobalSettings();   // 전역 공지사항 및 징계 기준 불러오기
+    } else {
+        currentUid = null;
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
+        const penaltyList = document.getElementById('penalty-list');
+        const totalScore = document.getElementById('total-score');
+        if(penaltyList) penaltyList.innerHTML = '';
+        if(totalScore) totalScore.innerText = '0';
     }
 });
+
+// 3. 관리자 전용 패널 버튼 동작 연결
+const adminBtn = document.getElementById('btn-open-admin');
+if (adminBtn) {
+    adminBtn.addEventListener('click', handleAdminAction);
+}
+
 
 // ==========================================
 // 👤 [개인] 상벌점 데이터 추가 및 로드 로직
@@ -89,6 +95,8 @@ function loadPenaltyData() {
         const scoreDisplay = document.getElementById('total-score');
         const scoreStatusText = document.getElementById('score-status-text');
         
+        if(!listContainer || !scoreDisplay || !scoreStatusText) return;
+
         listContainer.innerHTML = ''; 
         let totalScore = 0;
 
@@ -153,7 +161,6 @@ function loadPenaltyData() {
 // 🛠️ [전역/관리자] 공지사항 및 징계기준 관리 로직
 // ==========================================
 
-// 1. 전역 설정(공지/규칙) 실시간 불러오기
 function loadGlobalSettings() {
     const settingsRef = doc(db, 'system', 'globals');
 
@@ -163,13 +170,11 @@ function loadGlobalSettings() {
             renderNotices(data.notices || []);
             renderRules(data.rules || []);
         } else {
-            // 문서가 아예 없을 경우 빈 데이터로 초기화
             setDoc(settingsRef, { notices: [], rules: [] });
         }
     });
 }
 
-// 공지사항 렌더링 함수
 function renderNotices(notices) {
     const titleEl = document.getElementById('latest-notice-title');
     const listEl = document.getElementById('notice-list-container');
@@ -182,16 +187,13 @@ function renderNotices(notices) {
         return;
     }
 
-    // 최신 공지(배열의 마지막)를 요약 영역에 표시
     titleEl.innerText = notices[notices.length - 1];
 
-    // 전체 공지 리스트 렌더링 (최신순으로 뒤집어서 표시)
     listEl.innerHTML = [...notices].reverse().map(n => 
         `<div style="padding: 12px 15px; border-bottom: 1px solid #eee; font-size: 14px; color: #333;">• ${n}</div>`
     ).join('');
 }
 
-// 징계 기준 렌더링 함수
 function renderRules(rules) {
     const listEl = document.getElementById('discipline-list-container');
     if (!listEl) return;
@@ -206,7 +208,6 @@ function renderRules(rules) {
         `</ul>`;
 }
 
-// 2. 관리자 설정 버튼 클릭 시 동작 (Prompt 활용)
 async function handleAdminAction() {
     const action = prompt(
         "🛠️ 관리자 메뉴입니다. 원하시는 작업의 번호를 입력하세요.\n\n" +
