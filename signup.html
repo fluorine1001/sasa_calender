@@ -4,40 +4,231 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>회원가입 - 사사 캘린더</title>
-    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/main.css">
+    
+    <style>
+        body {
+            opacity: 0; /* auth-guard.js에서 인증 확인 후 1로 변경됨 */
+            transition: opacity 0.4s ease-in-out;
+            margin: 0;
+            background-color: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+        }
+
+        .auth-container {
+            background: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .auth-container h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-top: 0;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        /* 닉네임 입력과 중복확인 버튼을 가로로 배치 */
+        .input-with-btn {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-with-btn .form-control {
+            flex: 1;
+        }
+
+        .btn-check {
+            background-color: #f0f0f0;
+            color: #555;
+            border: 1px solid #ddd;
+            padding: 0 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .btn-check:hover {
+            background-color: #e4e4e4;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            padding: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .auth-links {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .auth-links a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-links a:hover {
+            text-decoration: underline;
+        }
+
+        /* 약관 동의 섹션 스타일 */
+        .tos-section {
+            background: #f8f9fa;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .tos-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tos-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #2c3e50;
+            font-weight: 500;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        #tos-toggle-btn {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0;
+        }
+
+        #tos-toggle-btn:hover {
+            color: #3498db;
+        }
+
+        #tos-content {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            font-size: 12px;
+            color: #666;
+            max-height: 120px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+    </style>
 </head>
 <body>
     <div class="auth-container">
-        <div class="auth-logo">SASA Calendar</div>
-        <div class="auth-subtitle">새로운 계정을 만들어 보세요</div>
-
-        <div class="input-group">
-            <label for="signup-email">이메일 주소</label>
-            <input type="email" id="signup-email" placeholder="학교 이메일을 권장합니다">
+        <h1>회원가입</h1>
+        
+        <div class="form-group">
+            <label for="signup-email">이메일</label>
+            <input type="email" id="signup-email" class="form-control" placeholder="example@gmail.com">
         </div>
 
-        <div class="input-group">
-            <label for="signup-nickname">사용할 닉네임</label>
-            <input type="text" id="signup-nickname" placeholder="시스템 내에서 사용할 이름">
+        <div class="form-group">
+            <label for="signup-nickname">닉네임</label>
+            <div class="input-with-btn">
+                <input type="text" id="signup-nickname" class="form-control" placeholder="사용할 닉네임 입력">
+                <button type="button" id="check-nickname-btn" class="btn-check">중복 확인</button>
+            </div>
         </div>
 
-        <div class="input-group">
+        <div class="form-group">
             <label for="signup-pw">비밀번호</label>
-            <input type="password" id="signup-pw" placeholder="6자리 이상 입력해주세요">
+            <input type="password" id="signup-pw" class="form-control" placeholder="6자리 이상 입력">
         </div>
 
-        <div class="input-group">
+        <div class="form-group">
             <label for="signup-pw-confirm">비밀번호 확인</label>
-            <input type="password" id="signup-pw-confirm" placeholder="비밀번호를 한 번 더 입력해주세요">
+            <input type="password" id="signup-pw-confirm" class="form-control" placeholder="비밀번호 다시 입력">
         </div>
 
-        <button id="signup-btn" class="btn-primary">가입하기</button>
+        <div class="tos-section">
+            <div class="tos-header">
+                <label class="tos-checkbox-label">
+                    <input type="checkbox" id="agree-tos">
+                    <span>(필수) 이용약관에 동의합니다.</span>
+                </label>
+                <button type="button" id="tos-toggle-btn">
+                    <span>약관 보기</span>
+                    <span id="tos-arrow" style="transition: transform 0.2s;">▼</span>
+                </button>
+            </div>
+            <div id="tos-content">
+                약관을 불러오는 중입니다...
+            </div>
+        </div>
+
+        <button type="button" id="signup-btn" class="btn-primary">가입하기</button>
 
         <div class="auth-links">
-            이미 계정이 있으신가요? <a href="login.html">로그인으로 돌아가기</a>
+            이미 계정이 있으신가요? <a href="login.html">로그인하기</a>
         </div>
     </div>
 
-    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/auth-guard.js"></script>
 </body>
 </html>
