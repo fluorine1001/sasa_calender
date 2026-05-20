@@ -32,83 +32,6 @@ const defaultLatexGuide = [
             { syntax: "\\sin x, \\cos x, \\tan x", desc: "기본 삼각함수", example: "$\\sin x, \\cos x, \\tan x$" },
             { syntax: "\\arcsin x, \\arctan x", desc: "역삼각함수", example: "$\\arcsin x, \\arctan x$" }
         ]
-    },
-    {
-        category: "3. 미분 및 극한 (해석학)",
-        inputs: [
-            { syntax: "\\lim_{x \\to \\infty}", desc: "우극한 / 무한대 극한", example: "$\\lim_{x \\to \\infty}$" },
-            { syntax: "\\frac{dy}{dx}", desc: "라이프니츠 미분 표기", example: "$\\frac{dy}{dx}$" },
-            { syntax: "\\frac{\\partial y}{\\partial x}", desc: "편미분 표기", example: "$\\frac{\\partial y}{\\partial x}$" },
-            { syntax: "f', f''", desc: "라그랑주 미분 기호", example: "$f', f''$" }
-        ]
-    },
-    {
-        category: "4. 연산 기호",
-        inputs: [
-            { syntax: "\\pm, \\mp", desc: "플러스마이너스 / 마이너스플러스", example: "$\\pm, \\mp$" },
-            { syntax: "\\times, \\div", desc: "곱셈(X) 및 나눗셈(÷)", example: "$\\times, \\div$" },
-            { syntax: "\\cdot", desc: "점 곱셈 기호", example: "$\\cdot$" },
-            { syntax: "\\circ, \\bullet", desc: "합성함수 기호 및 큰 점", example: "$\\circ, \\bullet$" }
-        ]
-    },
-    {
-        category: "5. 집합 및 논리학",
-        inputs: [
-            { syntax: "\\emptyset, \\varnothing", desc: "공집합 기호", example: "$\\emptyset, \\varnothing$" },
-            { syntax: "\\in, \\notin", desc: "원소 포함 여부", example: "$\\in, \\notin$" },
-            { syntax: "\\cap, \\cup", desc: "교집합 및 합집합", example: "$\\cap, \\cup$" },
-            { syntax: "\\subset, \\subseteq", desc: "부분집합 포함 관계", example: "$\\subset, \\subseteq$" },
-            { syntax: "\\forall, \\exists", desc: "모든(For all) / 존재성(Exist)", example: "$\\forall, \\exists$" },
-            { syntax: "\\therefore, \\because", desc: "그러므로 / 왜냐하면", example: "$\\therefore, \\because$" }
-        ]
-    },
-    {
-        category: "6. 관계식 및 화살표",
-        inputs: [
-            { syntax: "\\ne, \\equiv", desc: "같지 않음 / 합동(동치)", example: "$\\ne, \\equiv$" },
-            { syntax: "\\approx, \\propto", desc: "근사치(약 같음) / 비례 기호", example: "$\\approx, \\propto$" },
-            { syntax: "\\le, \\ge", desc: "작거나 같음 / 크거나 같음", example: "$\\le, \\ge$" },
-            { syntax: "\\ll, \\gg", desc: "매우 작음 / 매우 큼", example: "$\\ll, \\gg$" },
-            { syntax: "\\to, \\gets, \\leftrightarrow", desc: "기본 화살표 이동", example: "$\\to, \\gets, \\leftrightarrow$" },
-            { syntax: "\\Rightarrow, \\Leftrightarrow", desc: "조건 필연성 / 필요충분조건", example: "$\\Rightarrow, \\Leftrightarrow$" }
-        ]
-    },
-    {
-        category: "7. 대형 연산자 및 분수",
-        inputs: [
-            { syntax: "\\frac{a}{b}", desc: "기본 세로형 분수", example: "$\\frac{a}{b}$" },
-            { syntax: "\\sqrt{x}, \\sqrt[n]{x}", desc: "제곱근 및 n제곱근 루트", example: "$\\sqrt{x}, \\sqrt[n]{x}$" },
-            { syntax: "\\sum_{i=1}^{n}", desc: "시그마(합 연산자)", example: "$\\sum_{i=1}^{n}$" },
-            { syntax: "\\prod_{i=1}^{n}", desc: "파이(곱 연산자)", example: "$\\prod_{i=1}^{n}$" },
-            { syntax: "\\int_{a}^{b}", desc: "정적분 범위 지정", example: "$\\int_{a}^{b}$" },
-            { syntax: "\\iint, \\oint", desc: "중적분 및 선적분 기호", example: "$\\iint, \\oint$" }
-        ]
-    },
-    {
-        category: "8. 괄호 및 크기 제어",
-        inputs: [
-            { syntax: "\\{ A \\}", desc: "중괄호 문자 표기 (역슬래시 필수)", example: "$\\{ A \\}$" },
-            { syntax: "\\langle A \\rangle", desc: "화살괄호 (내적/양자역학)", example: "$\\langle A \\rangle$" },
-            { syntax: "\\lfloor x \\rfloor, \\lceil x \\rceil", desc: "바닥함수(버림) / 천장함수(올림)", example: "$\\lfloor x \\rfloor, \\lceil x \\rceil$" },
-            { syntax: "\\left( \\frac{a}{b} \\right)", desc: "안쪽 분수 크기에 맞춘 자동 확장 괄호", example: "$\\left( \\frac{a}{b} \\right)$" }
-        ]
-    },
-    {
-        category: "9. 행렬 및 구조화",
-        inputs: [
-            { syntax: "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}", desc: "둥근 괄호형 일반 행렬", example: "$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$" },
-            { syntax: "\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}", desc: "각진 대괄호형 행렬", example: "$\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}$" },
-            { syntax: "\\begin{cases} x & (x \\ge 0) \\\\ -x & (x < 0) \\end{cases}", desc: "조건별 함수 값 정의 (연립/절댓값)", example: "$\\begin{cases} x & (x \\ge 0) \\\\ -x & (x < 0) \\end{cases}$" }
-        ]
-    },
-    {
-        category: "10. 수학용 글꼴 (Font)",
-        inputs: [
-            { syntax: "\\mathrm{abc}", desc: "로만체 (일반 텍스트 인라인 기입용)", example: "$\\mathrm{abc}$" },
-            { syntax: "\\mathbf{xyz}", desc: "볼드체 (주로 수식 내 벡터 표기용)", example: "$\\mathbf{xyz}$" },
-            { syntax: "\\mathbb{R, Z, N}", desc: "칠판 볼드체 (실수, 정수, 자연수 집합)", example: "$\\mathbb{R, Z, N}$" },
-            { syntax: "\\mathcal{A, B, C}", desc: "필기 서체 표기", example: "$\\mathcal{A, B, C}$" }
-        ]
     }
 ];
 
@@ -236,15 +159,6 @@ async function checkAndLoadGlobalSettings() {
     if (unsubscribeGlobals) unsubscribeGlobals();
     const settingsRef = doc(db, 'system', 'globals');
 
-    // 🚀 [임시 치트코드] 새로고침하는 순간 무조건 위키백과 데이터베이스로 강제 덮어쓰기!
-    try {
-        await updateDoc(settingsRef, { latexGuide: defaultLatexGuide });
-        console.log("✅ 위키백과 가이드 자동 마이그레이션 성공!");
-    } catch(e) {
-        // 문서가 아예 없는 초기 계정인 경우 세팅
-        await setDoc(settingsRef, { notices: [], rules: [], latexGuide: defaultLatexGuide });
-    }
-    
     try {
         if (isCurrentUserAdmin) {
             const docSnap = await getDoc(settingsRef);
