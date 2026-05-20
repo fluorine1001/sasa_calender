@@ -1,6 +1,3 @@
-// 🚀 Firebase v10 Storage 모듈 로드
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js";
-
 export class NoticeEditor {
     constructor(containerId, latexGuide, callbacks) {
         this.container = document.getElementById(containerId);
@@ -8,9 +5,13 @@ export class NoticeEditor {
         this.callbacks = callbacks;
         this.quill = null;
         
-        // Firebase Storage 인스턴스 초기화 (메인 앱이 먼저 초기화되어 있어야 합니다)
-        this.storage = getStorage();
+        // 💡 Cloudinary 설정 부분 (가입 후 본인의 정보로 변경해야 합니다)
+        // YOUR_CLOUD_NAME 부분에 Cloudinary 클라우드 이름을 넣으세요.
+        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/image/upload"; 
         
+        // Settings > Upload > Upload presets에서 생성한 'Unsigned' 프리셋 이름을 넣으세요.
+        this.uploadPreset = "YOUR_UNSIGNED_PRESET"; 
+
         this.renderUI();
         this.initQuill();
         this.initEvents();
@@ -49,7 +50,7 @@ export class NoticeEditor {
         this.addLinkRow();
     }
 
-    // 📌 Quill 에디터 및 미디어 툴바 설정
+    // 📌 Quill 에디터 초기화
     initQuill() {
         if (!window.Quill) return;
         this.quill = new Quill('#new-notice-editor', {
@@ -62,77 +63,71 @@ export class NoticeEditor {
                         ['bold', 'italic', 'underline', 'strike'],
                         [{ 'color': [] }, { 'background': [] }],
                         [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        ['link', 'image', 'video', 'clean'] // 💡 이미지 및 비디오 버튼 활성화
+                        ['link', 'image', 'video', 'clean']
                     ],
                     handlers: {
-                        image: this.imageUploadHandler.bind(this), // 💡 이미지 업로드 커스텀 핸들러
-                        video: this.videoEmbedHandler.bind(this)   // 💡 비디오 삽입 커스텀 핸들러
+                        image: this.imageUploadHandler.bind(this), // 💡 Cloudinary 핸들러 연결
+                        video: this.videoEmbedHandler.bind(this)
                     }
                 }
             }
         });
-
-        // 툴바 한국어 가이드 팁 셋팅
-        const toolbarContainer = this.container.querySelector('.ql-toolbar');
-        if (toolbarContainer) {
-            const toolbarTitles = {
-                '.ql-bold': '굵게', '.ql-italic': '기울임꼴', '.ql-underline': '밑줄', '.ql-strike': '취소선',
-                '.ql-color': '글자 색상', '.ql-background': '배경 색상', '.ql-list[value="ordered"]': '숫자 목록',
-                '.ql-list[value="bullet"]': '점 목록', '.ql-link': '링크 삽입', '.ql-image': '이미지 업로드',
-                '.ql-video': '동영상 링크', '.ql-clean': '서식 지우기', '.ql-header[value="1"]': '대제목',
-                '.ql-header[value="2"]': '중제목', '.ql-header:not([value])': '본문'
-            };
-            for (let selector in toolbarTitles) {
-                const el = toolbarContainer.querySelector(selector);
-                if (el) el.setAttribute('title', toolbarTitles[selector]);
-            }
-        }
     }
 
-    // 📌 📷 Firebase Storage 이미지 실제 업로드 처리
+    // 📌 🖼️ [핵심 로직] Cloudinary 이미지 업로드 핸들러
     async imageUploadHandler() {
+        if (this.cloudinaryUrl.includes("YOUR_CLOUD_NAME") || this.uploadPreset === "YOUR_UNSIGNED_PRESET") {
+            alert("⚠️ 코드 상단에 Cloudinary 클라우드 이름과 업로드 프리셋을 먼저 설정해주세요!");
+            return;
+        }
+
         const input = document.createElement('input');
         input.setAttribute('type', 'file');
-        input.setAttribute('accept', 'image/*'); // 이미지 파일만 선택 가능
+        input.setAttribute('accept', 'image/*');
         input.click();
 
         input.onchange = async () => {
             const file = input.files[0];
             if (!file) return;
 
-            // 에디터 내 현재 커서 위치 파악
             const range = this.quill.getSelection() || { index: this.quill.getLength() };
-            
-            // 텍스트로 업로드 중임을 알려 사용자가 글을 중복 제출하는 것을 방지 (UX 개선)
             this.quill.insertText(range.index, '[이미지 업로드 중...⏳]');
             
-            try {
-                // 고유 파일명을 위해 타임스탬프 결합하여 Storage 경로 지정
-                const storageRef = ref(this.storage, `notice_images/${Date.now()}_${file.name}`);
-                
-                // 파일 업로드 실행
-                const snapshot = await uploadBytes(storageRef, file);
-                
-                // 업로드된 파일의 공개 다운로드 URL 추출
-                const downloadURL = await getDownloadURL(snapshot.ref);
+            // Cloudinary API 전송을 위한 FormData 객체 생성
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', this.uploadPreset); // Unsigned 업로드 권한 인증용
 
-                // 임시 안내 텍스트 삭제 후, 추출한 이미지 URL을 에디터 본문에 HTML로 삽입
-                this.quill.deleteText(range.index, '[이미지 업로드 중...⏳]'.length);
-                this.quill.insertEmbed(range.index, 'image', downloadURL);
-                
-                // 커서를 이미지 바로 다음 칸으로 안전하게 이동
-                this.quill.setSelection(range.index + 1);
+            try {
+                // Cloudinary 업로드 API 호출
+                const response = await fetch(this.cloudinaryUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.secure_url) {
+                    const downloadURL = result.secure_url; // https 로 시작하는 안전한 이미지 URL
+                    
+                    // 임시 텍스트 지우고 이미지 삽입
+                    this.quill.deleteText(range.index, '[이미지 업로드 중...⏳]'.length);
+                    this.quill.insertEmbed(range.index, 'image', downloadURL);
+                    this.quill.setSelection(range.index + 1);
+                } else {
+                    throw new Error(result.error?.message || '업로드 실패');
+                }
             } catch (error) {
-                console.error("Firebase Storage 업로드 실패:", error);
+                console.error("Cloudinary 업로드 실패:", error);
                 this.quill.deleteText(range.index, '[이미지 업로드 중...⏳]'.length);
-                alert("이미지 업로드에 실패했습니다. Storage 보안 규칙을 확인하세요.");
+                alert("이미지 업로드에 실패했습니다. 설정 정보나 네트워크를 확인하세요.");
             }
         };
     }
 
-    // 📌 🎬 동영상 링크 삽입 처리
+    // 📌 동영상 링크 삽입 처리
     videoEmbedHandler() {
-        const url = prompt("YouTube, Vimeo 등의 '소스 코드 공유용 URL' 또는 동영상 MP4 주소를 입력하세요:");
+        const url = prompt("YouTube / Vimeo '공유 주소' 또는 일반 MP4 영상 주소를 입력하세요:");
         if (!url) return;
 
         const range = this.quill.getSelection() || { index: this.quill.getLength() };
@@ -140,7 +135,7 @@ export class NoticeEditor {
         this.quill.setSelection(range.index + 1);
     }
 
-    // 📌 이벤트 및 아코디언 핸들러 (기존 유지)
+    // 📌 기본 이벤트 및 구조 제어 (기존과 동일)
     initEvents() {
         const guideToggle = this.container.querySelector('#latex-guide-toggle');
         guideToggle.addEventListener('click', () => {
