@@ -8,7 +8,7 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 // 🚀 새롭게 분리한 독립 에디터 클래스 불러오기
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 merit.js 로드 완료 (Firebase 기반 동적 수식 가이드 탑재 - 에디터 모듈화 적용)");
+console.log("🚀 merit.js 로드 완료 (Firebase 기반 동적 수식 가이드 및 중첩 징계 기준 아코디언 탑재)");
 
 let currentUid = null;
 let isCurrentUserAdmin = false;
@@ -37,7 +37,11 @@ const defaultLatexGuide = [
     }
 ];
 
+// 💡 중첩 징계 기준 구조를 지원하기 위한 글로벌 상태 초기화
 let currentGlobals = { notices: [], rules: [], latexGuide: defaultLatexGuide };
+
+// 화면을 다시 그릴 때 열려있던 토글 상태를 유지하기 위한 메모리 Set
+let openRulesTracker = new Set();
 
 // 🌟 에디터 및 폼 상태 변수
 let editorInstance = null;
@@ -189,7 +193,7 @@ async function checkAndLoadGlobalSettings() {
         
         renderAdminForm(); 
         renderNotices(currentGlobals.notices);
-        renderRules(currentGlobals.rules);
+        renderRules(currentGlobals.rules); // 업그레이드된 중첩 렌더러 호출
     });
 }
 
@@ -291,24 +295,92 @@ function renderNotices(notices) {
     }
 }
 
-// 📌 징계 기준 렌더링
+// ==========================================
+// 🔄 💥 [업그레이드] 중첩 리스트형 징계 기준 렌더링 시스템
+// ==========================================
 function renderRules(rules) { 
     const listEl = document.getElementById('discipline-list-container');
     if (!listEl) return;
+    
     let html = '';
-    if (rules.length === 0) { html += '<p style="padding: 15px; color:#c5221f;">등록된 징계 기준이 없습니다.</p>'; } 
-    else {
-        html += `<ul class="rule-list" style="margin: 0; padding: 15px; padding-left: 30px;">`;
-        rules.forEach((r, idx) => {
-            html += `<li style="margin-bottom: 8px; display:flex; justify-content:space-between;"><span style="color:#c5221f;">• ${r}</span>
-            ${isCurrentUserAdmin ? `<button class="btn-delete-global" data-type="rules" data-index="${idx}" style="background:none;border:none;cursor:pointer;">🗑️</button>` : ''}</li>`;
+
+    // 기존 String 배열 유저 구버전 데이터 마이그레이션 및 파싱 처리
+    let parsedRules = [];
+    rules.forEach((item) => {
+        if (typeof item === 'string') {
+            parsedRules.push({ score: item, reasons: [] });
+        } else if (item && item.score) {
+            parsedRules.push(item);
+        }
+    });
+
+    if (parsedRules.length === 0) { 
+        html += '<p style="padding: 20px; color:#c5221f; text-align:center; font-size:14px;">등록된 벌점 분류 기준이 없습니다.</p>'; 
+    } else {
+        html += `<div class="rules-accordion-wrapper" style="display:flex; flex-direction:column; gap:8px; padding:12px;">`;
+        
+        parsedRules.forEach((ruleGroup, parentIdx) => {
+            const isOpened = openRulesTracker.has(parentIdx);
+            const contentDisplay = isOpened ? 'block' : 'none';
+            const arrowRotate = isOpened ? 'transform: rotate(90deg);' : '';
+
+            // 내부 자식 리스트 사유들 파싱하기
+            let childReasonsHtml = '';
+            if (!ruleGroup.reasons || ruleGroup.reasons.length === 0) {
+                childReasonsHtml = `<li style="color:#888; font-size:13px; list-style:none; padding: 4px 0;">등록된 하위 세부 사유가 없습니다.</li>`;
+            } else {
+                ruleGroup.reasons.forEach((reason, childIdx) => {
+                    childReasonsHtml += `
+                        <li style="margin-bottom: 6px; display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#333; padding:4px 0; border-bottom: 1px dashed #f1f1f1;">
+                            <span>• ${reason}</span>
+                            ${isCurrentUserAdmin ? `
+                                <button class="btn-delete-sub-reason" data-parent-idx="${parentIdx}" data-child-idx="${childIdx}" style="background:none; border:none; cursor:pointer; color:#d93025; font-size:12px; padding:2px 6px;">삭제</button>
+                            ` : ''}
+                        </li>
+                    `;
+                });
+            }
+
+            html += `
+                <div class="rule-group-item" style="border: 1px solid #e0e0e0; border-radius:6px; background:#fff; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                    <div class="rule-group-header" data-group-idx="${parentIdx}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; cursor:pointer; background:#f8fafc; user-select:none;">
+                        <span style="font-weight:bold; color:#1e3a8a; font-size:14px;">📊 ${ruleGroup.score} <small style="color:#64748b; font-weight:normal; margin-left:6px;">(${ruleGroup.reasons ? ruleGroup.reasons.length : 0}건)</small></span>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            ${isCurrentUserAdmin ? `
+                                <button class="btn-delete-parent-group" data-parent-idx="${parentIdx}" style="background:none; border:none; cursor:pointer; font-size:12px; color:#d93025;" title="분류 삭제">✕</button>
+                            ` : ''}
+                            <span class="rule-arrow" style="font-size:11px; color:#64748b; transition:transform 0.2s; ${arrowRotate}">▶</span>
+                        </div>
+                    </div>
+                    
+                    <div class="rule-group-body" id="rule-group-body-${parentIdx}" style="display:${contentDisplay}; padding:15px; background:#ffffff; border-top:1px solid #eee;">
+                        <ul style="margin: 0; padding-left: 10px; list-style:none;">
+                            ${childReasonsHtml}
+                        </ul>
+                        
+                        ${isCurrentUserAdmin ? `
+                            <div style="display:flex; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid #f1f1f1;">
+                                <input type="text" id="new-reason-input-${parentIdx}" placeholder="${ruleGroup.score}에 매칭할 사유 내용" style="flex:1; padding:6px 10px; font-size:12px; border:1px solid #cbd5e1; border-radius:4px; outline:none;">
+                                <button class="btn-add-sub-reason cl-btn-primary" data-parent-idx="${parentIdx}" style="padding:6px 12px; font-size:12px; background:#10b981; border-radius:4px; border:none; color:#fff; cursor:pointer; font-weight:bold;">사유 추가</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
         });
-        html += `</ul>`;
+        html += `</div>`;
     }
+
+    // 관리자 하단 새 조건 추가창 바인딩
     if (isCurrentUserAdmin) {
-        html += `<div style="padding: 12px; margin: 10px 15px; background: #fdfdfd; border: 1px dashed #ccc; border-radius: 6px; display: flex; gap: 8px;">
-            <input type="text" id="new-rule-input" placeholder="새 징계 기준" style="flex:1; padding: 8px; border: 1px solid #ddd;"><button class="btn-add-global cl-btn-primary" data-type="rules" style="padding: 8px;">추가</button></div>`;
+        html += `
+            <div style="padding: 12px; margin: 10px 12px; background: #fdfdfd; border: 1px dashed #cbd5e1; border-radius: 6px; display: flex; gap: 8px; align-items:center;">
+                <input type="text" id="new-rule-input" placeholder="예: 벌점 1점, 벌점 3점, 상점 기준 등" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+                <button class="btn-add-parent-group cl-btn-primary" style="padding:8px 14px; font-size:13px; font-weight:bold; background:#1a73e8; border:none; color:white; border-radius:4px; cursor:pointer;">➕ 분류 추가</button>
+            </div>
+        `;
     }
+    
     listEl.innerHTML = html;
 }
 
@@ -316,10 +388,30 @@ function renderRules(rules) {
 // 🖱️ 이벤트 리스너 (아코디언 토글 & 관리자 통합 액션)
 // ==========================================
 document.addEventListener('click', async (e) => {
+    // 1. 공지사항 아코디언 토글 제어
     const titleBar = e.target.closest('.notice-title-bar');
     if (titleBar && !e.target.closest('button')) {
         const bodyEl = document.getElementById(titleBar.getAttribute('data-target'));
         if (bodyEl) bodyEl.style.display = bodyEl.style.display === 'none' ? 'block' : 'none';
+        return;
+    }
+
+    // 2. 💥 중첩 벌점 징계 기준 아코디언 토글 제어 (비로그인/로그인 공용)
+    const ruleHeader = e.target.closest('.rule-group-header');
+    if (ruleHeader && !e.target.closest('button')) {
+        const pIdx = parseInt(ruleHeader.dataset.groupIdx, 10);
+        const bodyEl = document.getElementById(`rule-group-body-${pIdx}`);
+        const arrowEl = ruleHeader.querySelector('.rule-arrow');
+        
+        if (bodyEl.style.display === 'none') {
+            bodyEl.style.display = 'block';
+            arrowEl.style.transform = 'rotate(90deg)';
+            openRulesTracker.add(pIdx); // 열림 상태 기록
+        } else {
+            bodyEl.style.display = 'none';
+            arrowEl.style.transform = '';
+            openRulesTracker.delete(pIdx); // 닫힘 상태 기록
+        }
         return;
     }
 
@@ -328,7 +420,7 @@ document.addEventListener('click', async (e) => {
     const target = e.target.closest('button');
     if (!target) return;
 
-    // 공지사항 수정 버튼 감지
+    // 3. 공지사항 수정 버튼 핸들러
     if (target.classList.contains('btn-edit-global')) {
         editingNoticeIndex = parseInt(target.dataset.index, 10);
         const notice = currentGlobals.notices[editingNoticeIndex];
@@ -344,17 +436,7 @@ document.addEventListener('click', async (e) => {
         return;
     }
 
-    // 징계 기준 추가
-    if (target.classList.contains('btn-add-global')) {
-        const inputEl = document.getElementById(`new-rule-input`);
-        const text = inputEl.value.trim();
-        if (text) {
-            currentGlobals.rules.push(text);
-            await updateDoc(settingsRef, { rules: currentGlobals.rules });
-        }
-    }
-    
-    // 항목 삭제 (공지사항 & 징계 기준)
+    // 4. 공지사항 삭제 핸들러
     if (target.classList.contains('btn-delete-global')) {
         const type = target.dataset.type;
         const idx = target.dataset.index;
@@ -362,11 +444,63 @@ document.addEventListener('click', async (e) => {
             currentGlobals[type].splice(idx, 1); 
             await updateDoc(settingsRef, { [type]: currentGlobals[type] });
             
-            // 공지사항 삭제 시, 현재 에디터가 수정 중이던 항목이라면 에디터도 함께 초기화
             if (type === 'notices' && editingNoticeIndex === parseInt(idx, 10)) {
                 editingNoticeIndex = null;
                 if (editorInstance) editorInstance.reset();
             }
         }
+        return;
+    }
+
+    // 5. 💥 [중첩 리스트] 1단계 - 대분류(벌점 조건) 추가
+    if (target.classList.contains('btn-add-parent-group')) {
+        const inputEl = document.getElementById('new-rule-input');
+        const text = inputEl.value.trim();
+        if (!text) return alert("추가할 벌점 분류명을 적어주세요.");
+        
+        // 새 데이터 구조 push
+        currentGlobals.rules.push({ score: text, reasons: [] });
+        await updateDoc(settingsRef, { rules: currentGlobals.rules });
+        inputEl.value = '';
+        return;
+    }
+
+    // 6. 💥 [중첩 리스트] 1단계-1 - 대분류 전체 삭제
+    if (target.classList.contains('btn-delete-parent-group')) {
+        if (!confirm("이 벌점 분류 그룹과 소속된 모든 하위 사유가 영구 삭제됩니다. 진행할까요?")) return;
+        const parentIdx = parseInt(target.dataset.parentIdx, 10);
+        
+        currentGlobals.rules.splice(parentIdx, 1);
+        openRulesTracker.delete(parentIdx); // 추적기 초기화
+        await updateDoc(settingsRef, { rules: currentGlobals.rules });
+        return;
+    }
+
+    // 7. 💥 [중첩 리스트] 2단계 - 대분류 내부에 '세부 사유' 서브 추가
+    if (target.classList.contains('btn-add-sub-reason')) {
+        const parentIdx = parseInt(target.dataset.parentIdx, 10);
+        const inputEl = document.getElementById(`new-reason-input-${parentIdx}`);
+        const text = inputEl.value.trim();
+        if (!text) return alert("징계 사유 내용을 바르게 채워주세요.");
+
+        if (!currentGlobals.rules[parentIdx].reasons) {
+            currentGlobals.rules[parentIdx].reasons = [];
+        }
+        
+        currentGlobals.rules[parentIdx].reasons.push(text);
+        openRulesTracker.add(parentIdx); // 새로 추가된 그룹은 화면 갱신 후에도 강제 열림 처리
+        await updateDoc(settingsRef, { rules: currentGlobals.rules });
+        return;
+    }
+
+    // 8. 💥 [중첩 리스트] 2단계-1 - 세부 사유 건별 삭제
+    if (target.classList.contains('btn-delete-sub-reason')) {
+        const parentIdx = parseInt(target.dataset.parentIdx, 10);
+        const childIdx = parseInt(target.dataset.childIdx, 10);
+        
+        currentGlobals.rules[parentIdx].reasons.splice(childIdx, 1);
+        openRulesTracker.add(parentIdx); // 삭제 액션 후에도 열림 상태 유지 보존
+        await updateDoc(settingsRef, { rules: currentGlobals.rules });
+        return;
     }
 });
