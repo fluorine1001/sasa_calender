@@ -3,25 +3,123 @@ import {
     signInWithEmailAndPassword, 
     sendPasswordResetEmail,
     setPersistence,
-    browserLocalPersistence
+    browserLocalPersistence,
+    onAuthStateChanged,
+    getAuth
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-// 💡 기존 임포트 항목에 'getDoc'을 추가했습니다.
 import { doc, setDoc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { auth, db } from "./firebase-init.js";
 
 // ==========================================
-// 📜 [신규] DB에서 이용약관 데이터 원격 로드
+// ⏰ [세션 관리] 자동 로그아웃 및 세션 타이머 로직 (오류 해결 핵심)
+// ==========================================
+const INACTIVITY_LIMIT = 30 * 60 * 1000; // 30분
+let inactivityTimer;
+
+export const logoutUser = (isAutoLogout = false) => {
+    auth.signOut().then(() => {
+        localStorage.removeItem('currentUserUid');
+        localStorage.removeItem('currentUserNickname');
+        localStorage.removeItem('keepLogin'); 
+        localStorage.removeItem('lastActive');
+        
+        if (isAutoLogout === true) {
+            alert("일정 시간 동안 활동이 없어 자동으로 로그아웃 되었습니다.");
+        }
+        window.location.replace("login.html");
+    });
+};
+
+const resetInactivityTimer = () => {
+    const isKeepLoginChecked = localStorage.getItem('keepLogin');
+    if (isKeepLoginChecked === 'true') return;
+
+    localStorage.setItem('lastActive', Date.now());
+
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+        logoutUser(true); 
+    }, INACTIVITY_LIMIT);
+};
+
+const setupActivityListeners = () => {
+    const isKeepLoginChecked = localStorage.getItem('keepLogin');
+    if (isKeepLoginChecked === 'true') return; 
+
+    const lastActive = localStorage.getItem('lastActive');
+    if (lastActive) {
+        const passedTime = Date.now() - parseInt(lastActive);
+        if (passedTime > INACTIVITY_LIMIT) {
+            logoutUser(true);
+            return;
+        }
+    }
+
+    window.addEventListener('mousemove', resetInactivityTimer);
+    window.addEventListener('keydown', resetInactivityTimer);
+    window.addEventListener('click', resetInactivityTimer);
+    window.addEventListener('scroll', resetInactivityTimer);
+    
+    resetInactivityTimer();
+};
+
+// ==========================================
+// 🔑 [인증 감지] 페이지별 접근 권한 및 화면 표시 제어
+// ==========================================
+onAuthStateChanged(auth, async (user) => {
+    // 현재 페이지가 로그인이나 회원가입 페이지인지 확인
+    const isAuthPage = window.location.pathname.includes("login.html") || window.location.pathname.includes("signup.html");
+
+    if (user) {
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            localStorage.setItem('currentUserUid', user.uid);
+            localStorage.setItem('currentUserNickname', userData.nickname);
+            
+            // UI 반영 요소가 존재하는 페이지에서만 실행 (에러 방지)
+            const nicknameElement = document.getElementById('display-nickname');
+            if (nicknameElement) nicknameElement.textContent = userData.nickname;
+            
+            if (userData.isAdmin) {
+                const adminPanel = document.getElementById('admin-panel');
+                if (adminPanel) adminPanel.style.display = 'block';
+            }
+            
+            // 로그인 상태인데 로그인/회원가입 페이지에 머물러 있다면 메인으로 이동
+            if (isAuthPage) {
+                window.location.replace("index.html");
+                return;
+            }
+
+            // 데이터 준비 완료 시 투명도를 복구하여 흰 화면 현상 해결
+            document.body.style.opacity = "1";
+            setupActivityListeners();
+        }
+    } else {
+        // 로그아웃 상태인데 메인 페이지 등 보호된 페이지에 있다면 로그인으로 튕겨내기
+        if (!isAuthPage) {
+            window.location.replace("login.html");
+        } else {
+            // 로그인/회원가입 페이지라면 정상적으로 화면 보여주기
+            document.body.style.opacity = "1";
+        }
+    }
+});
+
+// ==========================================
+// 📜 [이용약관] DB에서 이용약관 데이터 원격 로드
 // ==========================================
 const tosContent = document.getElementById('tos-content');
 if (tosContent) {
     const loadTermsOfService = async () => {
         try {
-            // merit.js에서 사용하던 전역 설정 문서와 동일한 경로를 바라봅니다.
             const globalSettingsRef = doc(db, 'system', 'globals');
             const docSnap = await getDoc(globalSettingsRef);
 
             if (docSnap.exists() && docSnap.data().tos) {
-                // 데이터베이스에 저장된 약관 내용을 반영 (HTML 태그 허용 혹은 일반 텍스트 포맷팅)
                 tosContent.innerHTML = docSnap.data().tos;
             } else {
                 tosContent.innerHTML = "제 1 조 (목적)<br>본 약관은 SASA 캘린더 서비스 이용 규정을 정의합니다.<br><br>(※ Firebase console의 system/globals 문서에 'tos' 필드를 추가하여 실시간으로 약관을 수정할 수 있습니다.)";
