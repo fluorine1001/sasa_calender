@@ -347,13 +347,14 @@ function subscribeTasks() {
             return;
         }
 
-        // 1. 데이터를 과목별로 그룹화
+        // 1. 데이터를 과목별로 그룹화 (courseName이 없는 경우 '기타'로 분류)
         const groups = {};
         snapshot.forEach((docSnap) => {
             const data = docSnap.data();
             const task = { id: docSnap.id, ...data };
-            if (!groups[task.courseName]) groups[task.courseName] = [];
-            groups[task.courseName].push(task);
+            const course = task.courseName || "기타/일반";
+            if (!groups[course]) groups[course] = [];
+            groups[course].push(task);
         });
 
         listContainer.innerHTML = '';
@@ -362,12 +363,12 @@ function subscribeTasks() {
         Object.keys(groups).sort().forEach(courseName => {
             const groupSection = document.createElement('div');
             groupSection.className = 'cl-course-group';
-            
+
             groupSection.innerHTML = `
                 <div class="cl-course-header">${courseName}</div>
                 <div class="cl-list"></div>
             `;
-            
+
             const subList = groupSection.querySelector('.cl-list');
             
             // 3. 과목 내 과제를 마감일 내림차순(최신순)으로 정렬 (기한 없음은 맨 뒤로)
