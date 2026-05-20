@@ -7,10 +7,10 @@ export class NoticeEditor {
         
         // 💡 Cloudinary 설정 부분 (가입 후 본인의 정보로 변경해야 합니다)
         // YOUR_CLOUD_NAME 부분에 Cloudinary 클라우드 이름을 넣으세요.
-        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/image/upload"; 
+        this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/djryl7blo/image/upload"; 
         
         // Settings > Upload > Upload presets에서 생성한 'Unsigned' 프리셋 이름을 넣으세요.
-        this.uploadPreset = "YOUR_UNSIGNED_PRESET"; 
+        this.uploadPreset = "SASAcalender"; 
 
         this.renderUI();
         this.initQuill();
