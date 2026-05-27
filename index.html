@@ -280,6 +280,47 @@
         }
         .status-unlinked { background-color: #fce8e6; color: #d93025; }
         .status-linked { background-color: #e6f4ea; color: #1e8e3e; }
+
+        .notification-switch {
+            position: relative;
+            display: inline-block;
+            width: 52px;
+            height: 28px;
+        }
+        .notification-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .notification-slider {
+            position: absolute;
+            inset: 0;
+            background: #d1d5db;
+            border-radius: 999px;
+            transition: background 0.2s ease;
+        }
+        .notification-slider::before {
+            content: "";
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            left: 4px;
+            top: 4px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        .notification-switch input:checked + .notification-slider {
+            background: #4d97fc;
+        }
+        .notification-switch input:checked + .notification-slider::before {
+            transform: translateX(24px);
+        }
+        .notification-switch input:disabled + .notification-slider {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -469,6 +510,16 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card" style="background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 20px;">
+                    <div class="card-header" style="border-bottom: 1px solid #eee; margin-bottom: 20px; padding-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                        <h3 style="margin: 0; color: #2c3e50;">알림</h3>
+                        <label class="notification-switch">
+                            <input type="checkbox" id="notification-toggle" disabled>
+                            <span class="notification-slider"></span>
+                        </label>
+                    </div>
+                </div>
             </section>
         </main>
     </div>
@@ -611,5 +662,53 @@
     <script type="module" src="js/merit.js"></script>
     
     <script type="module" src="js/assessment.js"></script>
+    <script type="module">
+        import { auth, db } from "./js/firebase-init.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
+        import { doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+
+        const notiToggle = document.getElementById("notification-toggle");
+        let userDocRef = null;
+
+        if (notiToggle) {
+            notiToggle.disabled = true;
+
+            onAuthStateChanged(auth, async (user) => {
+                if (!user) {
+                    notiToggle.disabled = true;
+                    return;
+                }
+
+                userDocRef = doc(db, "users", user.uid);
+                try {
+                    const docSnap = await getDoc(userDocRef);
+                    const allowedNotifications = docSnap.exists() && docSnap.data()?.allowedNotifications !== undefined
+                        ? docSnap.data().allowedNotifications
+                        : false;
+
+                    if (!docSnap.exists() || docSnap.data()?.allowedNotifications === undefined) {
+                        await setDoc(userDocRef, { allowedNotifications: false }, { merge: true });
+                    }
+
+                    notiToggle.checked = allowedNotifications;
+                    notiToggle.disabled = false;
+                } catch (error) {
+                    console.error("알림 설정 로드 실패:", error);
+                }
+            });
+
+            notiToggle.addEventListener("change", async (event) => {
+                if (!userDocRef) return;
+                const isChecked = event.target.checked;
+
+                try {
+                    await updateDoc(userDocRef, { allowedNotifications: isChecked });
+                } catch (error) {
+                    console.error("알림 설정 저장 실패:", error);
+                    notiToggle.checked = !isChecked;
+                }
+            });
+        }
+    </script>
 </body>
 </html>
