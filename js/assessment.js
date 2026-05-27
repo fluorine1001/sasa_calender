@@ -1,3 +1,5 @@
+import { NoticeEditor } from './rich-editor.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     // 1. 과목 데이터 및 설정 데이터 상태 관리
     let subjects = [
@@ -7,15 +9,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
     let editingId = null; // 수정 모드 판별용
 
-    // DOM 요소
-    const tabAssessment = document.getElementById('tab-assessment');
-    const tabEditor = document.getElementById('tab-editor');
+    // DOM 요소 (수정됨: 실제 HTML ID 적용)
+    const tabAssessment = document.getElementById('tab-list-view');
+    const tabEditor = document.getElementById('tab-editor-view');
     const listContainer = document.getElementById('evaluation-list');
     const searchInput = document.getElementById('search-input');
     const sortSelect = document.getElementById('sort-select');
     const settingsModal = document.getElementById('settings-modal');
 
-    // 2. NoticeEditor 인스턴스화 (rich_editor.js)
+    // 2. NoticeEditor 인스턴스화
     const editor = new NoticeEditor('editor-container', '<p>수식은 $...$ 로 입력하세요.</p>', {
         onSubmit: async (data) => {
             if (editingId) {
@@ -42,14 +44,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 리스트 <-> 에디터 탭 전환
+    // 리스트 <-> 에디터 탭 전환 (수정됨: display 속성 조작)
     function toggleEditorTab(showEditor) {
         if (showEditor) {
-            tabAssessment.classList.remove('active');
-            tabEditor.classList.add('active');
+            tabAssessment.style.display = 'none';
+            tabEditor.style.display = 'block';
         } else {
-            tabEditor.classList.remove('active');
-            tabAssessment.classList.add('active');
+            tabEditor.style.display = 'none';
+            tabAssessment.style.display = 'block';
         }
     }
 
