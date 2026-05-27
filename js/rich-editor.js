@@ -186,7 +186,7 @@ export class NoticeEditor {
         modal.style.display = 'flex';
     }
 
-    // 📌 탭 변경 제어 로직 (요청에 따라 텍스트 가이드 메시지 완전 제거)
+    // 📌 탭 변경 제어 로직
     switchTab(sourceType) {
         this.modalState.source = sourceType;
         const btnFile = document.getElementById('tab-btn-file');
@@ -377,6 +377,20 @@ export class NoticeEditor {
                 e.target.disabled = false;
             }
         });
+
+        // 📌 LaTeX 가이드 토글 이벤트 추가 (새로 추가된 부분!)
+        const latexToggleBtn = this.container.querySelector('#latex-guide-toggle');
+        const latexContent = this.container.querySelector('#latex-guide-content');
+        const latexArrow = this.container.querySelector('#latex-guide-arrow');
+
+        if (latexToggleBtn) {
+            latexContent.innerHTML = this.latexGuide; // 전달받은 가이드 내용 삽입
+            latexToggleBtn.addEventListener('click', () => {
+                const isHidden = latexContent.style.display === 'none';
+                latexContent.style.display = isHidden ? 'block' : 'none';
+                latexArrow.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+            });
+        }
     }
 
     // 📌 비디오 주소 포맷 검증 및 자동재생 차단 제어 필터
