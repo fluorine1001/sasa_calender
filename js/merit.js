@@ -141,11 +141,17 @@ function loadPenaltyData() {
         });
         scoreDisplay.innerText = totalScore;
         if (totalScore > 0) {
-            scoreDisplay.className = "total-score-display score-positive"; scoreStatusText.innerText = "현재 상점이 더 많습니다!";
+            scoreDisplay.className = "total-score-display score-positive";
+            scoreStatusText.innerText = "현재 상점이 더 많습니다!";
+        } else if (totalScore <= -20) {
+            scoreDisplay.className = "total-score-display score-negative";
+            scoreStatusText.innerText = "퇴사";
         } else if (totalScore < 0) {
-            scoreDisplay.className = "total-score-display score-negative"; scoreStatusText.innerText = "주의! 벌점이 누적되고 있습니다.";
+            scoreDisplay.className = "total-score-display score-negative";
+            scoreStatusText.innerText = "주의! 벌점이 누적되고 있습니다.";
         } else {
-            scoreDisplay.className = "total-score-display"; scoreStatusText.innerText = "상점과 벌점이 균형을 이루고 있습니다.";
+            scoreDisplay.className = "total-score-display";
+            scoreStatusText.innerText = "상점과 벌점이 균형을 이루고 있습니다.";
         }
 
         document.querySelectorAll('.btn-delete').forEach(btn => {
