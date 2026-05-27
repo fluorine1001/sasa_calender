@@ -10,19 +10,26 @@ let tokenClient = null;
 const GOOGLE_CLIENT_ID = "779057546808-59940trcdab7uouqn1ro0bi8bf85cost.apps.googleusercontent.com"; 
 const SCOPES = "https://www.googleapis.com/auth/classroom.courses.readonly https://www.googleapis.com/auth/classroom.coursework.me.readonly";
 
-document.addEventListener('DOMContentLoaded', () => {
+function initClassroom() {
+    console.log("[Classroom] 모듈 초기화 시작...");
     // 버튼 요소 가져오기
     const linkBtn = document.getElementById('btn-link-classroom');
     const unlinkBtn = document.getElementById('btn-unlink-classroom');
     const fetchBtn = document.getElementById('classroom-import-btn'); // 가져오기 버튼
 
     // 클릭 이벤트 바인딩
-    if (linkBtn) linkBtn.addEventListener('click', handleLinkClassroom);
+    if (linkBtn) {
+        console.log("[Classroom] 연동 버튼 감지됨, 리스너 연결 완료.");
+        linkBtn.addEventListener('click', handleLinkClassroom);
+    } else {
+        console.warn("[Classroom] 'btn-link-classroom' 버튼을 DOM에서 찾을 수 없습니다.");
+    }
     if (unlinkBtn) unlinkBtn.addEventListener('click', handleUnlinkClassroom);
 
     // [추가] 가져오기 버튼을 눌렀을 때 모달을 띄우는 코드
     if (fetchBtn) {
         fetchBtn.addEventListener('click', () => {
+            console.log("[Classroom] 가져오기 버튼 클릭됨.");
             const modal = document.getElementById('classroom-modal');
             if (modal) {
                 modal.style.display = 'flex';
@@ -35,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
         if (user) {
+            console.log("[Classroom] Firebase 로그인 감지:", user.uid);
             currentUid = user.uid;
             
             // 1. 구글 인증 클라이언트 초기화
@@ -43,45 +51,63 @@ document.addEventListener('DOMContentLoaded', () => {
             // 2. 현재 이 유저가 이미 클래스룸 연동을 완료했는지 DB 검사 및 UI 업데이트
             await checkLinkStatus();
         } else {
+            console.log("[Classroom] Firebase 로그아웃 상태.");
             currentUid = null;
-            updateUI(false, null);
-            if (unsubscribeTasks) unsubscribeTasks();
+            updateUI(false);
         }
     });
-});
+}
+
+// DOM 로드 상태에 따라 초기화 함수 실행
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initClassroom);
+} else {
+    initClassroom();
+}
 
 // 구글 Identity Services (GSI) 팝업 객체 초기화 함수
 function initGoogleAuth() {
     // html에 명시한 구글 스크립트가 아직 완전히 로드되지 않은 경우를 대비한 안전장치
-    if (typeof google === 'undefined') {
+    if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+        console.log("[Classroom] Google SDK 로드 대기 중 (300ms 후 재시도)...");
         setTimeout(initGoogleAuth, 300);
         return;
     }
 
+    console.log("[Classroom] Google SDK 로드 완료. TokenClient 초기화 시도...");
     if (!tokenClient) {
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: GOOGLE_CLIENT_ID,
             scope: SCOPES,
             callback: async (tokenResponse) => {
+                console.log("[Classroom] 구글 인증 응답 수신:", tokenResponse);
                 if (tokenResponse.error !== undefined) {
                     console.error("구글 인증 에러:", tokenResponse);
+                    alert("구글 인증에 실패했습니다.");
                     return;
                 }
                 // 인증 성공 시 토큰 저장
                 await saveTokenToFirestore(tokenResponse);
             },
         });
+        console.log("[Classroom] TokenClient 초기화 완료.");
     }
 }
 
 // [연동하기] 버튼 클릭 시 실행
 function handleLinkClassroom() {
+    console.log("[Classroom] 연동 버튼 클릭됨. 현재 UID:", currentUid, "TokenClient 존재 여부:", !!tokenClient);
+    if (!currentUid) {
+        alert("로그인이 필요합니다.");
+        return;
+    }
     if (!tokenClient) {
         alert("구글 인증 시스템을 초기화 중입니다. 잠시 후 다시 시도해주세요.");
         initGoogleAuth();
         return;
     }
     // 구글 계정 선택 및 권한 동의 팝업창 실행
+    console.log("[Classroom] 구글 액세스 토큰 요청 시작...");
     tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
@@ -307,11 +333,24 @@ async function loadAssignments(courseId, courseName, token) {
 async function saveAssignmentsToFirestore(assignments) {
     try {
         const tasksRef = collection(db, `users/${currentUid}/tasks`);
-        const promises = assignments.map(task => setDoc(doc(tasksRef, `google_${task.id}`), {
-            ...task,
-            status: 'todo',
-            createdAt: serverTimestamp()
-        }, { merge: true }));
+        const promises = assignments.map(task => {
+            // 마감 기한 하루 전 알림 계산
+            let reminderDate = null;
+            if (task.dueDate !== '기한 없음') {
+                const d = new Date(task.dueDate);
+                d.setDate(d.getDate() - 1);
+                reminderDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T09:00`;
+            }
+
+            return setDoc(doc(tasksRef, `google_${task.id}`), {
+                ...task,
+                status: 'todo',
+                memo: '', // 메모 필드 초기화
+                reminderDate: reminderDate,
+                isNotified: false,
+                createdAt: serverTimestamp()
+            }, { merge: true });
+        });
         
         await Promise.all(promises);
         alert(`${assignments.length}개의 과제를 '과제/공지' 탭에 저장했습니다!`);

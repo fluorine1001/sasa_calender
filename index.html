@@ -7,6 +7,12 @@
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/sections.css">
 
+    <!-- EmailJS SDK 추가 -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script type="text/javascript">
+        (function() { emailjs.init("Ob9J4BUU-6hbHVVdi"); })();
+    </script>
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
@@ -496,6 +502,10 @@
                     <input type="date" id="add-task-due" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">📧 메일 알림 설정</label>
+                    <input type="datetime-local" id="add-task-reminder" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">메모</label>
                     <textarea id="add-task-memo" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; min-height: 80px;" placeholder="간단한 메모를 남겨보세요..."></textarea>
                 </div>
@@ -526,6 +536,10 @@
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">마감 날짜</label>
                     <input type="date" id="edit-task-due" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">📧 메일 알림 설정</label>
+                    <input type="datetime-local" id="edit-task-reminder" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">메모</label>

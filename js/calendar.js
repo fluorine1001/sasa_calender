@@ -294,6 +294,7 @@ export function openTaskDetail(task) {
     document.getElementById('edit-task-course').value = task.courseName;
     document.getElementById('edit-task-title').value = task.title;
     document.getElementById('edit-task-due').value = task.dueDate === '기한 없음' ? '' : task.dueDate;
+    document.getElementById('edit-task-reminder').value = task.reminderDate || '';
     document.getElementById('edit-task-memo').value = task.memo || '';
     document.getElementById('edit-task-link').href = task.link;
     
@@ -304,6 +305,7 @@ export async function handleUpdateTask() {
     const taskId = document.getElementById('edit-task-id').value;
     const newTitle = document.getElementById('edit-task-title').value;
     const newDue = document.getElementById('edit-task-due').value;
+    const newReminder = document.getElementById('edit-task-reminder').value;
     const newMemo = document.getElementById('edit-task-memo').value;
 
     if (!newTitle) return alert("제목을 입력해주세요.");
@@ -313,6 +315,8 @@ export async function handleUpdateTask() {
         await updateDoc(taskRef, {
             title: newTitle,
             dueDate: newDue || '기한 없음',
+            reminderDate: newReminder || null,
+            isNotified: false, // 수정 시 알림 시간을 새로 설정하면 다시 발송 대상으로 포함
             memo: newMemo
         });
         alert("수정되었습니다.");
@@ -356,6 +360,7 @@ async function fetchTasksInRange(startDate, endDate) {
     );
     try {
         const querySnapshot = await getDocs(q);
+        // id가 데이터 내부 값에 의해 덮어씌워지지 않도록 id를 마지막에 배치
         return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id }));
     } catch (error) {
         return [];
