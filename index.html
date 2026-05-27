@@ -331,9 +331,14 @@
             <section id="tasks" class="tab-content">
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;">
                     <h1 style="margin:0;">과제/공지</h1>
-                    <button id="classroom-import-btn" class="cl-btn-primary">
-                        📥 클래스룸에서 가져오기
-                    </button>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-add-task-manual" class="cl-btn-primary" style="background-color: #34a853;">
+                            ➕ 과제 직접 추가
+                        </button>
+                        <button id="classroom-import-btn" class="cl-btn-primary" style="display: none;">
+                            📥 클래스룸 연동
+                        </button>
+                    </div>
                 </div>
                 <div id="tasks-list"></div>
             </section>
@@ -442,6 +447,38 @@
         </div>
     </div>
 
+    <!-- ── 수동 과제 추가 모달 ── -->
+    <div id="add-task-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1001; align-items: center; justify-content: center;">
+        <div class="cl-modal-box">
+            <div class="cl-modal-header">
+                <h3>➕ 새 과제 추가</h3>
+                <button class="cl-modal-close" id="add-task-close-btn">✕</button>
+            </div>
+            <div style="padding: 24px;">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">과목명</label>
+                    <input type="text" id="add-task-course" placeholder="예: 수학, 정보" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">과제 제목</label>
+                    <input type="text" id="add-task-title" placeholder="과제 내용을 입력하세요" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">마감 날짜</label>
+                    <input type="date" id="add-task-due" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">메모</label>
+                    <textarea id="add-task-memo" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; min-height: 80px;" placeholder="간단한 메모를 남겨보세요..."></textarea>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button id="btn-create-task" class="cl-btn-primary" style="flex: 1;">과제 추가하기</button>
+                    <button id="btn-add-task-cancel" style="flex: 1; background: #eee; border: 1px solid #ddd; padding: 10px; border-radius: 6px; cursor: pointer;">취소</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="task-detail-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1001; align-items: center; justify-content: center;">
         <div class="cl-modal-box">
             <div class="cl-modal-header">
@@ -461,6 +498,10 @@
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">마감 날짜</label>
                     <input type="date" id="edit-task-due" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">메모</label>
+                    <textarea id="edit-task-memo" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; min-height: 80px;" placeholder="과제 관련 메모를 입력하세요..."></textarea>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button id="btn-save-task" class="cl-btn-primary" style="flex: 1;">수정 내용 저장</button>
@@ -486,6 +527,12 @@
             document.getElementById('task-detail-modal').style.display = 'none';
         });
 
+        // 과제 추가 모달 닫기
+        document.getElementById('add-task-close-btn').addEventListener('click', () => document.getElementById('add-task-modal').style.display = 'none');
+        document.getElementById('btn-add-task-cancel').addEventListener('click', () => {
+            document.getElementById('add-task-modal').style.display = 'none';
+        });
+
         // 공지사항 아코디언 토글 로직
         const accordionToggle = document.getElementById('notice-accordion-toggle');
         if (accordionToggle) {
@@ -499,6 +546,7 @@
     </script>
 
     <script type="module" src="js/classroom.js"></script>
+    <script type="module" src="js/tasks.js"></script>
     <script type="module" src="js/calendar.js"></script>
     <script type="module" src="js/merit.js"></script>
 </body>

@@ -289,20 +289,22 @@ function renderEventsList(tasks, container) {
     });
 }
 
-function openTaskDetail(task) {
+export function openTaskDetail(task) {
     document.getElementById('edit-task-id').value = task.id; // google_... 형태의 문서 ID
     document.getElementById('edit-task-course').value = task.courseName;
     document.getElementById('edit-task-title').value = task.title;
     document.getElementById('edit-task-due').value = task.dueDate === '기한 없음' ? '' : task.dueDate;
+    document.getElementById('edit-task-memo').value = task.memo || '';
     document.getElementById('edit-task-link').href = task.link;
     
     document.getElementById('task-detail-modal').style.display = 'flex';
 }
 
-async function handleUpdateTask() {
+export async function handleUpdateTask() {
     const taskId = document.getElementById('edit-task-id').value;
     const newTitle = document.getElementById('edit-task-title').value;
     const newDue = document.getElementById('edit-task-due').value;
+    const newMemo = document.getElementById('edit-task-memo').value;
 
     if (!newTitle) return alert("제목을 입력해주세요.");
 
@@ -310,7 +312,8 @@ async function handleUpdateTask() {
         const taskRef = doc(db, `users/${currentUid}/tasks/${taskId}`);
         await updateDoc(taskRef, {
             title: newTitle,
-            dueDate: newDue || '기한 없음'
+            dueDate: newDue || '기한 없음',
+            memo: newMemo
         });
         alert("수정되었습니다.");
         document.getElementById('task-detail-modal').style.display = 'none';
@@ -321,7 +324,7 @@ async function handleUpdateTask() {
     }
 }
 
-async function handleDeleteTask() {
+export async function handleDeleteTask() {
     const taskId = document.getElementById('edit-task-id').value;
     if (!confirm("정말 이 과제를 삭제하시겠습니까?")) return;
 

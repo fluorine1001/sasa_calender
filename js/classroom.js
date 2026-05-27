@@ -42,9 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 2. 현재 이 유저가 이미 클래스룸 연동을 완료했는지 DB 검사 및 UI 업데이트
             await checkLinkStatus();
-
-            // 3. 저장된 과제 목록 실시간 감시 및 화면 표시
-            subscribeTasks();
         } else {
             currentUid = null;
             updateUI(false, null);
@@ -149,7 +146,7 @@ async function handleUnlinkClassroom() {
     }
 }
 
-// js/classroom.js 맨 아래에 있는 updateUI 함수를 이것으로 교체
+// 연동 상태에 따른 버튼 표시 제어 (설정 탭 위주)
 function updateUI(isLinked) {
     const linkStatus = document.getElementById('link-status');
     const linkedEmailDisplay = document.getElementById('linked-email-display');
@@ -325,94 +322,4 @@ async function saveAssignmentsToFirestore(assignments) {
         console.error("Firestore 저장 실패:", error);
         alert("저장 중 오류가 발생했습니다.");
     }
-}
-
-let unsubscribeTasks = null;
-
-/**
- * 3. Firestore에서 저장된 과제 목록을 실시간으로 가져와 index.html의 #tasks-list에 표시
- */
-function subscribeTasks() {
-    if (!currentUid) return;
-
-    const tasksRef = collection(db, `users/${currentUid}/tasks`);
-    const q = query(tasksRef, orderBy("createdAt", "desc"));
-
-    unsubscribeTasks = onSnapshot(q, (snapshot) => {
-        const listContainer = document.getElementById('tasks-list');
-        if (!listContainer) return;
-
-        if (snapshot.empty) {
-            listContainer.innerHTML = '<p style="text-align:center; color:#888; padding:40px;">저장된 과제가 없습니다. 클래스룸에서 가져와보세요!</p>';
-            return;
-        }
-
-        // 1. 데이터를 과목별로 그룹화 (courseName이 없는 경우 '기타'로 분류)
-        const groups = {};
-        snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            const task = { id: docSnap.id, ...data };
-            const course = task.courseName || "기타/일반";
-            if (!groups[course]) groups[course] = [];
-            groups[course].push(task);
-        });
-
-        listContainer.innerHTML = '';
-
-        // 2. 과목 이름을 기준으로 정렬하여 렌더링
-        Object.keys(groups).sort().forEach(courseName => {
-            const groupSection = document.createElement('div');
-            groupSection.className = 'cl-course-group';
-
-            groupSection.innerHTML = `
-                <div class="cl-course-header">${courseName}</div>
-                <div class="cl-list"></div>
-            `;
-
-            const subList = groupSection.querySelector('.cl-list');
-            
-            // 3. 과목 내 과제를 마감일 내림차순(최신순)으로 정렬 (기한 없음은 맨 뒤로)
-            const sortedTasks = groups[courseName].sort((a, b) => {
-                if (a.dueDate === '기한 없음') return 1;
-                if (b.dueDate === '기한 없음') return -1;
-                return b.dueDate.localeCompare(a.dueDate); // 내림차순 정렬로 변경
-            });
-
-            sortedTasks.forEach(task => {
-                const item = document.createElement('div');
-                item.className = 'cl-list-item';
-                item.style.cursor = 'default';
-                item.innerHTML = `
-                    <div class="cl-work-info">
-                        <span class="cl-work-title">${task.title}</span>
-                        <span class="cl-work-due" style="color: ${task.dueDate === '기한 없음' ? '#aaa' : '#e67e22'}">
-                            📅 마감: ${task.dueDate}
-                        </span>
-                    </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <a href="${task.link}" target="_blank" class="cl-btn-primary" style="text-decoration:none; font-size:12px; padding:6px 12px;">클래스룸 열기</a>
-                        <button class="btn-delete-task" data-id="${task.id}" style="background:none; border:none; cursor:pointer; font-size:16px;">🗑️</button>
-                    </div>
-                `;
-
-                item.querySelector('.btn-delete-task').onclick = async () => {
-                    if (confirm("이 과제를 목록에서 삭제하시겠습니까?")) {
-                        await deleteDoc(doc(db, `users/${currentUid}/tasks/${task.id}`));
-                    }
-                };
-                subList.appendChild(item);
-            });
-
-            listContainer.appendChild(groupSection);
-        });
-    }, (error) => {
-        // [추가] 에러 핸들러: 권한 문제 등이 발생하면 여기서 잡힙니다.
-        console.error("과제 목록 감시 에러:", error);
-        if (error.code === 'permission-denied') {
-            const listContainer = document.getElementById('tasks-list');
-            if (listContainer) {
-                listContainer.innerHTML = '<p style="text-align:center; color:#d93025; padding:20px;">데이터 접근 권한이 없습니다. 관리자에게 문의하세요.</p>';
-            }
-        }
-    });
 }
