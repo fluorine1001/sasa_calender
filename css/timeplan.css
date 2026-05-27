@@ -1,0 +1,78 @@
+.timeplan-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+.tp-date-nav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.tp-nav-btn {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+#tp-current-date {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.tp-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    min-height: 600px;
+}
+
+.tp-column {
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.tp-column h3 {
+    margin-top: 0;
+    font-size: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f0f0f0;
+    color: #2c3e50;
+}
+
+.tp-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.tp-item {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    gap: 10px;
+    transition: 0.2s;
+}
+.tp-item:hover { border-color: #3498db; }
+.tp-item.done { opacity: 0.6; background: #f9f9f9; }
+.tp-item.done .tp-title { text-decoration: line-through; }
+
+.tp-priority {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.p-high { background: #fee2e2; color: #dc2626; }
+.p-mid { background: #fef3c7; color: #d97706; }
+.p-low { background: #f0f9ff; color: #0284c7; }
+
+.tp-btn-move { margin-left: auto; border: none; background: none; cursor: pointer; font-size: 18px; }

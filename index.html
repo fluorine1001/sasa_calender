@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/sections.css">
     <link rel="stylesheet" href="css/calendar.css">
+    <link rel="stylesheet" href="css/timeplan.css">
 
     <!--for test-->
     <!-- EmailJS SDK 추가 -->
@@ -457,7 +458,28 @@
                 </div>
             </section>
             
-            <section id="timeplan" class="tab-content"><h1>시간 계획</h1></section>
+            <section id="timeplan" class="tab-content">
+                <div class="timeplan-header">
+                    <h1>📅 시간 계획 플래너</h1>
+                    <div class="tp-date-nav">
+                        <button id="tp-prev-day" class="tp-nav-btn">◀</button>
+                        <input type="date" id="tp-current-date">
+                        <button id="tp-next-day" class="tp-nav-btn">▶</button>
+                        <button id="tp-reset-day" class="tp-nav-btn" style="color: #d93025; margin-left: 10px;">초기화</button>
+                    </div>
+                </div>
+
+                <div class="tp-container">
+                    <div class="tp-column tp-candidates">
+                        <h3>📥 계획에 추가할 과제</h3>
+                        <div id="tp-candidate-list" class="tp-list"></div>
+                    </div>
+                    <div class="tp-column tp-today-plan">
+                        <h3>✅ 오늘의 할 일</h3>
+                        <div id="tp-planned-list" class="tp-list"></div>
+                    </div>
+                </div>
+            </section>
             
             <section id="eval" class="tab-content">
                 <div id="tab-list-view" style="display: block;">
@@ -541,7 +563,7 @@
                 <h3>➕ 새 과제 추가</h3>
                 <button class="cl-modal-close" id="add-task-close-btn">✕</button>
             </div>
-            <div style="padding: 24px;">
+            <div style="padding: 24px; overflow-y: auto; flex: 1;">
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">과목명</label>
                     <input type="text" id="add-task-course" placeholder="예: 수학, 정보" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
@@ -585,8 +607,12 @@
                 <h3>📝 과제 상세 정보</h3>
                 <button class="cl-modal-close" id="task-detail-close-btn">✕</button>
             </div>
-            <div id="task-detail-body" style="padding: 24px;">
+            <div id="task-detail-body" style="padding: 24px; overflow-y: auto; flex: 1;">
                 <input type="hidden" id="edit-task-id">
+                <div class="form-group" style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px; background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                    <input type="checkbox" id="edit-task-status" style="width: 18px; height: 18px; cursor: pointer;">
+                    <label for="edit-task-status" style="font-size: 14px; font-weight: bold; color: #2c3e50; cursor: pointer; margin: 0;">과제 완료 처리</label>
+                </div>
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">과목명</label>
                     <input type="text" id="edit-task-course" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;" readonly>
@@ -669,6 +695,7 @@
     <script type="module" src="js/tasks.js"></script>
     <script type="module" src="js/calendar.js"></script>
     <script type="module" src="js/merit.js"></script>
+    <script type="module" src="js/timeplan.js"></script>
     
     <script type="module" src="js/assessment.js"></script>
     <script type="module">

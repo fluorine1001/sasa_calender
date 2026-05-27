@@ -293,8 +293,13 @@ export function openTaskDetail(task) {
     document.getElementById('edit-task-id').value = task.id; // google_... 형태의 문서 ID
     document.getElementById('edit-task-course').value = task.courseName;
     document.getElementById('edit-task-title').value = task.title;
+<<<<<<< Updated upstream
     const dueValue = task.dueDate === '기한 없음' ? '' : formatForDatetimeLocal(task.dueDate);
     document.getElementById('edit-task-due').value = dueValue;
+=======
+    document.getElementById('edit-task-status').checked = (task.status === 'done');
+    document.getElementById('edit-task-due').value = task.dueDate === '기한 없음' ? '' : task.dueDate;
+>>>>>>> Stashed changes
     document.getElementById('edit-task-reminder').value = task.reminderDate || '';
     document.getElementById('edit-task-memo').value = task.memo || '';
     document.getElementById('edit-task-link').href = task.link;
@@ -317,6 +322,7 @@ export async function handleUpdateTask() {
     const taskId = document.getElementById('edit-task-id').value;
     const newTitle = document.getElementById('edit-task-title').value;
     const newDue = document.getElementById('edit-task-due').value;
+    const newStatus = document.getElementById('edit-task-status').checked ? 'done' : 'todo';
     const newReminder = document.getElementById('edit-task-reminder').value;
     const newMemo = document.getElementById('edit-task-memo').value;
 
@@ -326,6 +332,7 @@ export async function handleUpdateTask() {
         const taskRef = doc(db, `users/${currentUid}/tasks/${taskId}`);
         await updateDoc(taskRef, {
             title: newTitle,
+            status: newStatus,
             dueDate: newDue || '기한 없음',
             reminderDate: newReminder || null,
             isNotified: false, // 수정 시 알림 시간을 새로 설정하면 다시 발송 대상으로 포함
