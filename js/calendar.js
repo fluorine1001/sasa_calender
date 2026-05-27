@@ -293,12 +293,24 @@ export function openTaskDetail(task) {
     document.getElementById('edit-task-id').value = task.id; // google_... 형태의 문서 ID
     document.getElementById('edit-task-course').value = task.courseName;
     document.getElementById('edit-task-title').value = task.title;
-    document.getElementById('edit-task-due').value = task.dueDate === '기한 없음' ? '' : task.dueDate;
+    const dueValue = task.dueDate === '기한 없음' ? '' : formatForDatetimeLocal(task.dueDate);
+    document.getElementById('edit-task-due').value = dueValue;
     document.getElementById('edit-task-reminder').value = task.reminderDate || '';
     document.getElementById('edit-task-memo').value = task.memo || '';
     document.getElementById('edit-task-link').href = task.link;
     
     document.getElementById('task-detail-modal').style.display = 'flex';
+}
+
+function formatForDatetimeLocal(dateString) {
+    if (!dateString) return '';
+    if (dateString.includes('T')) return dateString;
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}T23:59`;
 }
 
 export async function handleUpdateTask() {

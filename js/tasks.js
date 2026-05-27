@@ -31,15 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-create-task').onclick = handleCreateTask;
 
-    // 마감 기한 선택 시 알림 날짜 자동 계산 (하루 전 09:00)
     document.getElementById('add-task-due').addEventListener('change', (e) => {
-        if (e.target.value) {
-            const dueDate = new Date(e.target.value);
-            dueDate.setDate(dueDate.getDate() - 1);
-            const year = dueDate.getFullYear();
-            const month = String(dueDate.getMonth() + 1).padStart(2, '0');
-            const day = String(dueDate.getDate()).padStart(2, '0');
-            document.getElementById('add-task-reminder').value = `${year}-${month}-${day}T09:00`;
+        const reminderSelect = document.getElementById('add-task-reminder-option');
+        if (e.target.value && reminderSelect && !reminderSelect.value) {
+            reminderSelect.value = '24h';
         }
     });
 });
@@ -48,10 +43,12 @@ async function handleCreateTask() {
     const course = document.getElementById('add-task-course').value.trim();
     const title = document.getElementById('add-task-title').value.trim();
     const due = document.getElementById('add-task-due').value;
-    const reminder = document.getElementById('add-task-reminder').value;
+    const reminderOption = document.getElementById('add-task-reminder-option').value;
     const memo = document.getElementById('add-task-memo').value.trim();
 
     if (!course || !title) return alert("과목명과 제목은 필수입니다.");
+
+    const reminderDate = computeReminderDate(due, reminderOption);
 
     try {
         const tasksRef = collection(db, `users/${currentUid}/tasks`);
@@ -59,7 +56,8 @@ async function handleCreateTask() {
             courseName: course,
             title: title,
             dueDate: due || '기한 없음',
-            reminderDate: reminder || null,
+            reminderDate: reminderDate,
+            reminderOption: reminderOption || null,
             isNotified: false,
             memo: memo,
             link: '#', // 수동 추가는 링크 없음
@@ -69,11 +67,44 @@ async function handleCreateTask() {
         alert("과제가 추가되었습니다.");
         document.getElementById('add-task-modal').style.display = 'none';
         // 필드 초기화
-        ['add-task-course', 'add-task-title', 'add-task-due', 'add-task-reminder', 'add-task-memo'].forEach(id => document.getElementById(id).value = '');
+        ['add-task-course', 'add-task-title', 'add-task-due', 'add-task-memo'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('add-task-reminder-option').value = '24h';
     } catch (e) {
         console.error(e);
         alert("추가 중 오류가 발생했습니다.");
     }
+}
+
+function computeReminderDate(dueDateString, option) {
+    if (!dueDateString || !option) return null;
+
+    const dueDate = new Date(dueDateString);
+    if (Number.isNaN(dueDate.getTime())) return null;
+
+    if (!dueDateString.includes('T')) {
+        dueDate.setHours(23, 59, 0, 0);
+    }
+
+    const offsets = {
+        '1h': 1,
+        '2h': 2,
+        '4h': 4,
+        '8h': 8,
+        '12h': 12,
+        '24h': 24,
+        '48h': 48
+    };
+    const hoursBefore = offsets[option];
+    if (!hoursBefore) return null;
+
+    dueDate.setHours(dueDate.getHours() - hoursBefore);
+    const year = dueDate.getFullYear();
+    const month = String(dueDate.getMonth() + 1).padStart(2, '0');
+    const day = String(dueDate.getDate()).padStart(2, '0');
+    const hours = String(dueDate.getHours()).padStart(2, '0');
+    const minutes = String(dueDate.getMinutes()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 function subscribeTasks() {
@@ -121,6 +152,7 @@ function subscribeTasks() {
                     <div class="cl-work-info" style="flex:1; cursor:pointer;">
                         <span class="cl-work-title">${task.title} ${task.memo ? '<small title="메모 있음">📝</small>' : ''}</span>
                         <span class="cl-work-due">📅 마감: ${task.dueDate}</span>
+                        <span style="display:block; margin-top:6px; color:#3498db; font-size:12px;">${task.reminderDate ? '🔔 알림 설정됨' : '🔕 알림 없음'}</span>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center;">
                         ${task.link && task.link !== '#' ? `<a href="${task.link}" target="_blank" class="cl-btn-primary" style="font-size:12px; padding:6px 12px;">클래스룸</a>` : ''}

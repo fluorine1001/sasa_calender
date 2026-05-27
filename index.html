@@ -552,11 +552,20 @@
                 </div>
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">마감 날짜</label>
-                    <input type="date" id="add-task-due" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                    <input type="datetime-local" id="add-task-due" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">📧 메일 알림 설정</label>
-                    <input type="datetime-local" id="add-task-reminder" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                    <select id="add-task-reminder-option" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                        <option value="">알림 없음</option>
+                        <option value="1h">마감 1시간 전</option>
+                        <option value="2h">마감 2시간 전</option>
+                        <option value="4h">마감 4시간 전</option>
+                        <option value="8h">마감 8시간 전</option>
+                        <option value="12h">마감 12시간 전</option>
+                        <option value="24h" selected>마감 24시간 전</option>
+                        <option value="48h">마감 2일 전</option>
+                    </select>
                 </div>
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">메모</label>
@@ -588,7 +597,7 @@
                 </div>
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">마감 날짜</label>
-                    <input type="date" id="edit-task-due" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                    <input type="datetime-local" id="edit-task-due" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label style="display: block; font-size: 13px; color: #666; margin-bottom: 5px;">📧 메일 알림 설정</label>
