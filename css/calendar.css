@@ -1,0 +1,107 @@
+/* ── 캘린더 전용 스타일 ── */
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+}
+.calendar-nav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.calendar-nav h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #2c3e50;
+}
+.calendar-view-toggle button {
+    padding: 8px 12px;
+    font-size: 14px;
+    background-color: #f0f0f0;
+    color: #555;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.calendar-view-toggle button.active {
+    background-color: #3498db;
+    color: #fff;
+    border-color: #3498db;
+}
+
+.calendar-week-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-weight: bold;
+    color: #7f8c8d;
+    margin-bottom: 10px;
+}
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background-color: #e0e0e0;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* 캘린더 일자 셀 스타일 */
+.calendar-day {
+    background-color: #fff;
+    padding: 10px;
+    min-height: 80px;
+    text-align: right;
+    font-size: 14px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    transition: background-color 0.2s;
+}
+.calendar-day.empty { background-color: #f8f8f8; }
+.calendar-day.today { background-color: #e6f4ea; font-weight: bold; }
+
+/* ✨ 선택된 날짜 하이라이트 스타일 */
+.calendar-day.selected, .calendar-week-day.selected {
+    background-color: #f0f7ff !important;
+    outline: 2px solid #3498db;
+    outline-offset: -2px;
+    z-index: 1;
+}
+
+.calendar-day.has-events { background-color: #fcfdfe; }
+.calendar-day .event-count {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background-color: #3498db;
+    color: #fff;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+}
+
+/* 주간/일간 보기 레이아웃 */
+.calendar-week-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+}
+.calendar-week-day {
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    min-height: 200px;
+    padding: 10px;
+    transition: all 0.2s;
+}

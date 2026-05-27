@@ -2,6 +2,7 @@ import { db } from './firebase-init.js';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, deleteDoc, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { openTaskDetail } from './calendar.js';
+import { checkAndSendMailReminders } from './sendemail.js';
 
 let currentUid = null;
 let unsubscribeTasks = null;
@@ -12,11 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (user) {
             currentUid = user.uid;
             subscribeTasks();
-            // 로그인 시 미발송된 알림 확인
-            checkAndSendMailReminders();
             
+            // 로그인 시 미발송된 알림 확인
+            checkAndSendMailReminders(currentUid);
             // 1분마다 자동으로 미발송 알림이 있는지 체크
-            setInterval(checkAndSendMailReminders, 60000);
+            setInterval(() => checkAndSendMailReminders(currentUid), 60000);
         } else {
             currentUid = null;
             if (unsubscribeTasks) unsubscribeTasks();
@@ -142,49 +143,4 @@ function subscribeTasks() {
             listContainer.appendChild(groupSection);
         });
     });
-}
-
-/**
- * 미발송 알림 확인 및 이메일 전송 로직
- */
-async function checkAndSendMailReminders() {
-    if (!currentUid) return;
-    const auth = getAuth();
-    const userEmail = auth.currentUser.email;
-    const now = new Date().toISOString();
-
-    const tasksRef = collection(db, `users/${currentUid}/tasks`);
-    // 알림 설정이 있고, 아직 발송되지 않았으며, 알림 시간이 지난 과제 쿼리
-    const q = query(tasksRef, where("isNotified", "==", false));
-    
-    try {
-        const querySnapshot = await getDocs(q);
-        querySnapshot.forEach(async (docSnap) => {
-            const task = docSnap.data();
-            // reminderDate가 있고 현재 시간보다 이전인 경우 발송
-            if (task.reminderDate && task.reminderDate <= now) {
-                await sendEmail(userEmail, task.courseName, task.title, task.dueDate);
-                // 발송 완료 상태로 업데이트
-                await updateDoc(doc(db, `users/${currentUid}/tasks/${docSnap.id}`), {
-                    isNotified: true
-                });
-            }
-        });
-    } catch (error) {
-        console.error("알림 확인 중 에러:", error);
-    }
-}
-
-async function sendEmail(toEmail, course, title, due) {
-    const templateParams = {
-        email: toEmail,
-        message: `[${course}] ${title} 과제의 마감이 임박했습니다. (마감: ${due})`
-    };
-
-    try {
-        await emailjs.send("service_ivozeyc", "template_705rd8n", templateParams);
-        console.log("알림 메일 전송 성공:", title);
-    } catch (error) {
-        console.error("메일 발송 실패:", error);
-    }
 }
