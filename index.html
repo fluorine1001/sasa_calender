@@ -409,8 +409,36 @@
             </section>
             
             <section id="timeplan" class="tab-content"><h1>시간 계획</h1></section>
-            <section id="eval" class="tab-content"><h1>과목 평가 계획</h1></section>
             
+            <section id="eval" class="tab-content">
+                <div id="tab-list-view" style="display: block;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 10px;">
+                        <h1 style="margin: 0;">📚 과목별 평가 계획</h1>
+                        <button id="btn-admin-add" class="cl-btn-primary">➕ 새 계획 추가</button>
+                    </div>
+                    
+                    <div class="global-section" style="background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <input type="text" id="search-input" placeholder="과목명 검색 (띄어쓰기 무시)" style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                            <select id="sort-select" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="name-asc">사전순 (오름차순)</option>
+                                <option value="name-desc">사전순 (내림차순)</option>
+                                <option value="priority-asc">우선순위 (오름차순 + 사전순)</option>
+                                <option value="priority-desc">우선순위 (내림차순 + 내림차순)</option>
+                            </select>
+                            <button id="btn-user-settings" style="padding: 10px 16px; background: #f1f3f4; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">
+                                ⚙️ 맞춤 설정
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="evaluation-list"></div>
+                </div>
+
+                <div id="tab-editor-view" style="display: none;">
+                    <div id="editor-container"></div>
+                </div>
+            </section>
             <section id="settings" class="tab-content">
                 <h1>설정</h1>
                 
@@ -514,6 +542,22 @@
         </div>
     </div>
 
+    <div id="settings-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1002; align-items: center; justify-content: center;">
+        <div class="cl-modal-box" style="padding: 24px; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0; color: #1a73e8;">⚙️ 평가 계획 표시 설정</h3>
+            </div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 15px;">체크를 해제하면 목록에서 숨겨지며, 우선순위 값을 입력해 정렬할 수 있습니다.</p>
+            
+            <div id="settings-list" class="settings-list" style="max-height: 400px; overflow-y: auto; border: 1px solid #edf2f7; border-radius: 6px; background: #f8fafc; margin-bottom: 20px;">
+                </div>
+            
+            <div style="display: flex; justify-content: space-between;">
+                <button id="btn-reset-settings" style="padding: 8px 16px; background: #fff; color: #d93025; border: 1px solid #d93025; border-radius: 4px; cursor: pointer;">초기화</button>
+                <button id="btn-close-settings" class="cl-btn-primary">확인 및 적용</button>
+            </div>
+        </div>
+    </div>
     <script src="js/app.js"></script>
 
     <script>
@@ -549,5 +593,8 @@
     <script type="module" src="js/tasks.js"></script>
     <script type="module" src="js/calendar.js"></script>
     <script type="module" src="js/merit.js"></script>
+    
+    <script src="js/rich_editor.js"></script>
+    <script type="module" src="js/assessment.js"></script>
 </body>
 </html>
