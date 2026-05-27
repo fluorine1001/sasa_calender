@@ -5,20 +5,19 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 assessment.js 로드 완료 (관리자 권한 제어, 실시간 동기화 및 안전장치 적용)");
+console.log("🚀 assessment.js 로드 완료 (관리자 전역 공개/비공개 제어 적용)");
 
 // 💡 전역 상태 및 권한 변수
 let currentUid = null;
 let isCurrentUserAdmin = false;
 let unsubscribeAssessments = null;
 
-// 기존 상태 관리
 let subjects = []; 
 let userSettings = [];
 let editingId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 🎨 아코디언 및 리스트 UI용 CSS 자동 주입 (원본 유지)
+    // 🎨 아코디언 및 리스트 UI용 CSS 자동 주입
     if (!document.getElementById('accordion-custom-styles')) {
         const style = document.createElement('style');
         style.id = 'accordion-custom-styles';
@@ -29,13 +28,16 @@ document.addEventListener('DOMContentLoaded', () => {
             .accordion-header:hover { background: #f8fafc; }
             .accordion-body { display: none; padding: 20px; border-top: 1px solid #e2e8f0; color: #334155; line-height: 1.6; background: #fafbfc; }
             
-            /* 토글이 열렸을 때(.active)의 스타일 */
             .accordion-item.active .accordion-body { display: block; animation: fadeIn 0.3s ease-in-out; }
             .accordion-item.active .accordion-header { background: #f1f5f9; border-bottom: 1px solid #e2e8f0; }
             .accordion-item.active .accordion-arrow { transform: rotate(180deg); }
             
             .accordion-arrow { transition: transform 0.3s; display: inline-block; color: #3b82f6; margin-left: 12px; font-size: 12px; }
-            .btn-edit-subject, .btn-delete-subject { padding: 6px 12px; margin-left: 6px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s; }
+            .btn-edit-subject, .btn-delete-subject, .btn-toggle-public { padding: 6px 12px; margin-left: 6px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s; }
+            
+            /* 🚀 버튼 디자인 추가 */
+            .btn-toggle-public { background: #fef08a; color: #854d0e; }
+            .btn-toggle-public:hover { background: #fde047; }
             .btn-edit-subject { background: #e2e8f0; color: #475569; }
             .btn-edit-subject:hover { background: #cbd5e1; }
             .btn-delete-subject { background: #fee2e2; color: #ef4444; }
@@ -46,7 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.head.appendChild(style);
     }
 
-    // DOM 요소
     const tabAssessment = document.getElementById('tab-list-view');
     const tabEditor = document.getElementById('tab-editor-view');
     const listContainer = document.getElementById('evaluation-list');
@@ -55,9 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsModal = document.getElementById('settings-modal');
     const btnAdminAdd = document.getElementById('btn-admin-add');
 
-    // ==========================================
-    // 🔐 Auth 및 실시간 데이터 연동
-    // ==========================================
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
         if (user) {
@@ -84,21 +82,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const assessmentRef = doc(db, 'system', 'assessments');
 
         if (isCurrentUserAdmin) {
-            const docSnap = await getDoc(assessmentRef);
-            if (!docSnap.exists()) await setDoc(assessmentRef, { plans: [] });
-            if (btnAdminAdd) btnAdminAdd.style.display = 'inline-block'; // 관리자일 때만 추가 버튼 표시
+            try {
+                const docSnap = await getDoc(assessmentRef);
+                if (!docSnap.exists()) await setDoc(assessmentRef, { plans: [] });
+            } catch (e) {
+                console.error("문서 생성 오류:", e);
+            }
+            if (btnAdminAdd) btnAdminAdd.style.display = 'inline-block';
         } else {
             if (btnAdminAdd) btnAdminAdd.style.display = 'none';
         }
 
         unsubscribeAssessments = onSnapshot(assessmentRef, (docSnap) => {
             if (docSnap.exists()) {
-                subjects = docSnap.data().plans || [];
+                const rawPlans = docSnap.data().plans || [];
+                subjects = rawPlans.filter(sub => sub !== null && typeof sub === 'object' && sub.id);
             } else {
                 subjects = [];
             }
             
-            // 💡 새로 추가된 과목이 있다면 로컬 userSettings에도 기본값(보임) 추가 보정
             subjects.forEach(sub => {
                 if (!userSettings.find(s => s.id === sub.id)) {
                     userSettings.push({ id: sub.id, visible: true, priority: 1 });
@@ -109,41 +111,46 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ==========================================
-    // ✍️ 에디터 설정 (수정 시 로컬 배열 대신 Firestore 업데이트)
-    // ==========================================
     const editor = new NoticeEditor('editor-container', '<p>수식은 $...$ 로 입력하세요.</p>', {
         onSubmit: async (data) => {
             if (!isCurrentUserAdmin) return alert("수정 권한이 없습니다.");
 
             const assessmentRef = doc(db, 'system', 'assessments');
-            let updatedSubjects = [...subjects];
+            let updatedSubjects = subjects.filter(sub => sub !== null && typeof sub === 'object' && sub.id);
+
+            const safeTitle = data.title || '제목 없음';
+            const safeContent = data.bodyHtml || '';
+            const safeFiles = data.files || [];
 
             if (editingId) {
                 const idx = updatedSubjects.findIndex(s => s.id === editingId);
                 if (idx > -1) {
                     updatedSubjects[idx] = { 
                         ...updatedSubjects[idx], 
-                        title: data.title, 
-                        content: data.bodyHtml, 
-                        files: data.files 
+                        title: safeTitle, 
+                        content: safeContent, 
+                        files: safeFiles 
+                        // isPublic 값은 기존 상태를 그대로 유지
                     };
                 }
             } else {
-                const newId = Date.now();
                 updatedSubjects.push({ 
-                    id: newId, 
-                    title: data.title, 
-                    content: data.bodyHtml, 
-                    files: data.files 
+                    id: Date.now(), 
+                    title: safeTitle, 
+                    content: safeContent, 
+                    files: safeFiles,
+                    isPublic: true // 🚀 새 항목 추가 시 기본적으로 '공개' 상태로 설정
                 });
             }
 
-            // DB 업데이트 (이후 onSnapshot이 트리거되어 화면이 자동 갱신됨)
-            await updateDoc(assessmentRef, { plans: updatedSubjects });
-            
-            editingId = null;
-            toggleEditorTab(false);
+            try {
+                await updateDoc(assessmentRef, { plans: updatedSubjects });
+                editingId = null;
+                toggleEditorTab(false);
+            } catch (error) {
+                console.error("Firestore 업데이트 에러:", error);
+                alert("저장에 실패했습니다. 권한이나 네트워크를 확인해주세요.");
+            }
         },
         onCancel: () => {
             editingId = null;
@@ -161,25 +168,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ==========================================
-    // 🖥️ 리스트 렌더링 (안전 장치 추가 버전)
-    // ==========================================
     window.renderList = function() {
         const keyword = searchInput?.value.replace(/\s+/g, '').toLowerCase() || '';
         const sortType = sortSelect?.value || 'name-asc';
 
-        let displayData = subjects.map(sub => {
+        let displayData = subjects.filter(sub => sub !== null && sub.id).filter(sub => {
+            // 🚀 [핵심] 어드민이 아니면 전역 비공개 항목은 아예 화면에서 제외시킴
+            if (!isCurrentUserAdmin && sub.isPublic === false) return false;
+            return true;
+        }).map(sub => {
             const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
             return { ...sub, visible: setting.visible, priority: setting.priority };
         }).filter(sub => {
-            // 💡 안전장치 1: title이 없으면 빈 문자열로 처리
             const safeTitle = sub.title || ''; 
             const titleNoSpace = safeTitle.replace(/\s+/g, '').toLowerCase();
             return sub.visible && titleNoSpace.includes(keyword);
         });
 
         displayData.sort((a, b) => {
-            // 💡 안전장치 2: 정렬할 때도 title이 없는 경우를 대비
             const titleA = a.title || '';
             const titleB = b.title || '';
 
@@ -196,11 +202,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         listContainer.innerHTML = displayData.length > 0 ? displayData.map(sub => `
-            <div class="accordion-item" data-id="${sub.id}">
+            <div class="accordion-item ${sub.isPublic === false ? 'is-private' : ''}" data-id="${sub.id}" ${sub.isPublic === false ? 'style="border-color:#fca5a5; background:#fef2f2;"' : ''}>
                 <div class="accordion-header">
-                    <span style="flex-grow:1;">📑 ${sub.title || '제목 없음'}</span>
+                    <span style="flex-grow:1; display:flex; align-items:center;">
+                        ${sub.isPublic === false ? `<span style="background:#ef4444; color:white; font-size:11px; padding:2px 6px; border-radius:4px; margin-right:8px; line-height:1;">비공개</span>` : ''}
+                        📑 ${sub.title || '제목 없음'}
+                    </span>
                     <div style="display:flex; align-items:center;">
                         ${isCurrentUserAdmin ? `
+                            <button class="btn-toggle-public" onclick="togglePublic(${sub.id}, event)">${sub.isPublic === false ? '공개로 전환' : '비공개 처리'}</button>
                             <button class="btn-edit-subject" onclick="editSubject(${sub.id}, event)">수정</button>
                             <button class="btn-delete-subject" onclick="deleteSubject(${sub.id}, event)">삭제</button>
                         ` : ''}
@@ -224,9 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
         `).join('') : '<div style="text-align:center; padding: 40px; color:#94a3b8; background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">검색 결과가 없거나 표시할 항목이 없습니다.</div>';
     };
 
-    // ==========================================
-    // 🖱️ 이벤트 리스너 및 액션
-    // ==========================================
     listContainer.addEventListener('click', (e) => {
         const header = e.target.closest('.accordion-header');
         if (header && !e.target.closest('button')) {
@@ -234,6 +241,29 @@ document.addEventListener('DOMContentLoaded', () => {
             item.classList.toggle('active');
         }
     });
+
+    // 🚀 [신규 추가] 공개/비공개 상태를 토글하는 함수
+    window.togglePublic = async function(id, event) {
+        event.stopPropagation();
+        if (!isCurrentUserAdmin) return;
+
+        const updatedSubjects = subjects.map(s => {
+            if (s !== null && s.id === id) {
+                // isPublic이 명시적으로 false면 true로, 그 외(true거나 없을 때)는 false로 전환
+                return { ...s, isPublic: s.isPublic === false ? true : false };
+            }
+            return s;
+        }).filter(s => s !== null && s.id);
+
+        const assessmentRef = doc(db, 'system', 'assessments');
+        
+        try {
+            await updateDoc(assessmentRef, { plans: updatedSubjects });
+        } catch(e) {
+            console.error("공개 상태 변경 에러:", e);
+            alert("상태 변경에 실패했습니다.");
+        }
+    };
 
     window.editSubject = function(id, event) {
         event.stopPropagation();
@@ -251,11 +281,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isCurrentUserAdmin) return;
         
         if (confirm("정말 이 항목을 삭제하시겠습니까? (서버에서도 영구 삭제됩니다)")) {
-            const updatedSubjects = subjects.filter(s => s.id !== id);
+            const updatedSubjects = subjects.filter(s => s !== null && s.id && s.id !== id);
             const assessmentRef = doc(db, 'system', 'assessments');
-            await updateDoc(assessmentRef, { plans: updatedSubjects }); // DB 반영
             
-            userSettings = userSettings.filter(s => s.id !== id); // 로컬 설정 정리
+            try {
+                await updateDoc(assessmentRef, { plans: updatedSubjects });
+                userSettings = userSettings.filter(s => s.id !== id);
+            } catch(e) {
+                console.error("삭제 에러:", e);
+                alert("삭제에 실패했습니다.");
+            }
         }
     };
 
@@ -266,16 +301,18 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleEditorTab(true);
     });
 
-    // ⚙️ 개인화 설정 모달 동작
     document.getElementById('btn-user-settings')?.addEventListener('click', () => {
         const container = document.getElementById('settings-list');
         if(container) {
-            container.innerHTML = subjects.map(sub => {
+            container.innerHTML = subjects.filter(sub => sub && sub.id).filter(sub => {
+                // 🚀 모달창에서도 전역 비공개된 항목은 일반 사용자에게 숨김
+                if (!isCurrentUserAdmin && sub.isPublic === false) return false;
+                return true;
+            }).map(sub => {
                 const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
-                // 💡 안전장치 4: 설정 모달에서도 빈 제목 방지
                 return `
                     <div class="setting-item" style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee;">
-                        <label style="cursor:pointer;"><input type="checkbox" class="setting-visible" data-id="${sub.id}" ${setting.visible ? 'checked' : ''}> ${sub.title || '제목 없음'}</label>
+                        <label style="cursor:pointer;"><input type="checkbox" class="setting-visible" data-id="${sub.id}" ${setting.visible ? 'checked' : ''}> ${sub.isPublic === false ? '🚫[비공개] ' : ''}${sub.title || '제목 없음'}</label>
                         <div>우선순위: <input type="number" class="setting-priority" data-id="${sub.id}" value="${setting.priority}" style="width:40px; text-align:center;"></div>
                     </div>
                 `;
@@ -288,6 +325,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.setting-item').forEach(item => {
             const checkbox = item.querySelector('.setting-visible');
             const numberInput = item.querySelector('.setting-priority');
+            if(!checkbox) return;
+            
             const id = parseInt(checkbox.dataset.id);
             const setting = userSettings.find(s => s.id === id);
             if (setting) {
