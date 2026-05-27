@@ -56,13 +56,9 @@ async function handleCreateTask() {
             courseName: course,
             title: title,
             dueDate: due || '기한 없음',
-<<<<<<< Updated upstream
             reminderDate: reminderDate,
             reminderOption: reminderOption || null,
-=======
             status: 'todo', // ✅ 기본 상태 추가
-            reminderDate: reminder || null,
->>>>>>> Stashed changes
             isNotified: false,
             memo: memo,
             link: '#', // 수동 추가는 링크 없음

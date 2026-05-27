@@ -293,13 +293,9 @@ export function openTaskDetail(task) {
     document.getElementById('edit-task-id').value = task.id; // google_... 형태의 문서 ID
     document.getElementById('edit-task-course').value = task.courseName;
     document.getElementById('edit-task-title').value = task.title;
-<<<<<<< Updated upstream
+    document.getElementById('edit-task-status').checked = (task.status === 'done');
     const dueValue = task.dueDate === '기한 없음' ? '' : formatForDatetimeLocal(task.dueDate);
     document.getElementById('edit-task-due').value = dueValue;
-=======
-    document.getElementById('edit-task-status').checked = (task.status === 'done');
-    document.getElementById('edit-task-due').value = task.dueDate === '기한 없음' ? '' : task.dueDate;
->>>>>>> Stashed changes
     document.getElementById('edit-task-reminder').value = task.reminderDate || '';
     document.getElementById('edit-task-memo').value = task.memo || '';
     document.getElementById('edit-task-link').href = task.link;
