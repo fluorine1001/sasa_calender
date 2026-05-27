@@ -5,7 +5,7 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 assessment.js 로드 완료 (관리자 전역 공개/비공개 제어 적용)");
+console.log("🚀 assessment.js 로드 완료 (설정 창 내 사전순 오름차순 정렬 적용)");
 
 // 💡 전역 상태 및 권한 변수
 let currentUid = null;
@@ -35,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .accordion-arrow { transition: transform 0.3s; display: inline-block; color: #3b82f6; margin-left: 12px; font-size: 12px; }
             .btn-edit-subject, .btn-delete-subject, .btn-toggle-public { padding: 6px 12px; margin-left: 6px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s; }
             
-            /* 🚀 버튼 디자인 추가 */
             .btn-toggle-public { background: #fef08a; color: #854d0e; }
             .btn-toggle-public:hover { background: #fde047; }
             .btn-edit-subject { background: #e2e8f0; color: #475569; }
@@ -130,7 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         title: safeTitle, 
                         content: safeContent, 
                         files: safeFiles 
-                        // isPublic 값은 기존 상태를 그대로 유지
                     };
                 }
             } else {
@@ -139,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     title: safeTitle, 
                     content: safeContent, 
                     files: safeFiles,
-                    isPublic: true // 🚀 새 항목 추가 시 기본적으로 '공개' 상태로 설정
+                    isPublic: true 
                 });
             }
 
@@ -173,7 +171,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const sortType = sortSelect?.value || 'name-asc';
 
         let displayData = subjects.filter(sub => sub !== null && sub.id).filter(sub => {
-            // 🚀 [핵심] 어드민이 아니면 전역 비공개 항목은 아예 화면에서 제외시킴
             if (!isCurrentUserAdmin && sub.isPublic === false) return false;
             return true;
         }).map(sub => {
@@ -202,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         listContainer.innerHTML = displayData.length > 0 ? displayData.map(sub => `
-            <div class="accordion-item ${sub.isPublic === false ? 'is-private' : ''}" data-id="${sub.id}" ${sub.isPublic === false ? 'style="border-color:#fca5a5; background:#fef2f2;"' : ''}>
+            <div class="accordion-item" data-id="${sub.id}" ${sub.isPublic === false ? 'style="border-color:#fca5a5; background:#fef2f2;"' : ''}>
                 <div class="accordion-header">
                     <span style="flex-grow:1; display:flex; align-items:center;">
                         ${sub.isPublic === false ? `<span style="background:#ef4444; color:white; font-size:11px; padding:2px 6px; border-radius:4px; margin-right:8px; line-height:1;">비공개</span>` : ''}
@@ -242,21 +239,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 🚀 [신규 추가] 공개/비공개 상태를 토글하는 함수
     window.togglePublic = async function(id, event) {
         event.stopPropagation();
         if (!isCurrentUserAdmin) return;
 
         const updatedSubjects = subjects.map(s => {
             if (s !== null && s.id === id) {
-                // isPublic이 명시적으로 false면 true로, 그 외(true거나 없을 때)는 false로 전환
                 return { ...s, isPublic: s.isPublic === false ? true : false };
             }
             return s;
         }).filter(s => s !== null && s.id);
 
         const assessmentRef = doc(db, 'system', 'assessments');
-        
         try {
             await updateDoc(assessmentRef, { plans: updatedSubjects });
         } catch(e) {
@@ -283,7 +277,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm("정말 이 항목을 삭제하시겠습니까? (서버에서도 영구 삭제됩니다)")) {
             const updatedSubjects = subjects.filter(s => s !== null && s.id && s.id !== id);
             const assessmentRef = doc(db, 'system', 'assessments');
-            
             try {
                 await updateDoc(assessmentRef, { plans: updatedSubjects });
                 userSettings = userSettings.filter(s => s.id !== id);
@@ -305,10 +298,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('settings-list');
         if(container) {
             container.innerHTML = subjects.filter(sub => sub && sub.id).filter(sub => {
-                // 🚀 모달창에서도 전역 비공개된 항목은 일반 사용자에게 숨김
                 if (!isCurrentUserAdmin && sub.isPublic === false) return false;
                 return true;
-            }).map(sub => {
+            })
+            // 🚀 [핵심 수정] 설정 창 안의 목록을 열 때마다 항상 제목 기준 사전순(오름차순) 정렬 수행
+            .sort((a, b) => {
+                const titleA = a.title || '';
+                const titleB = b.title || '';
+                return titleA.localeCompare(titleB);
+            })
+            .map(sub => {
                 const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
                 return `
                     <div class="setting-item" style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee;">
