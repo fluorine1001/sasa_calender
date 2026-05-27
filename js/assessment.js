@@ -5,7 +5,7 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 assessment.js 로드 완료 (관리자 권한 제어 및 실시간 동기화 적용)");
+console.log("🚀 assessment.js 로드 완료 (관리자 권한 제어, 실시간 동기화 및 안전장치 적용)");
 
 // 💡 전역 상태 및 권한 변수
 let currentUid = null;
@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnAdminAdd = document.getElementById('btn-admin-add');
 
     // ==========================================
-    // 🔐 Auth 및 실시간 데이터 연동 (신규 추가)
+    // 🔐 Auth 및 실시간 데이터 연동
     // ==========================================
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // 🖥️ 리스트 렌더링 (원본 로직 유지 + 관리자 버튼 조건부 렌더링)
+    // 🖥️ 리스트 렌더링 (안전 장치 추가 버전)
     // ==========================================
     window.renderList = function() {
         const keyword = searchInput?.value.replace(/\s+/g, '').toLowerCase() || '';
@@ -172,27 +172,33 @@ document.addEventListener('DOMContentLoaded', () => {
             const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
             return { ...sub, visible: setting.visible, priority: setting.priority };
         }).filter(sub => {
-            const titleNoSpace = sub.title.replace(/\s+/g, '').toLowerCase();
+            // 💡 안전장치 1: title이 없으면 빈 문자열로 처리
+            const safeTitle = sub.title || ''; 
+            const titleNoSpace = safeTitle.replace(/\s+/g, '').toLowerCase();
             return sub.visible && titleNoSpace.includes(keyword);
         });
 
         displayData.sort((a, b) => {
-            if (sortType === 'name-asc') return a.title.localeCompare(b.title);
-            if (sortType === 'name-desc') return b.title.localeCompare(a.title);
+            // 💡 안전장치 2: 정렬할 때도 title이 없는 경우를 대비
+            const titleA = a.title || '';
+            const titleB = b.title || '';
+
+            if (sortType === 'name-asc') return titleA.localeCompare(titleB);
+            if (sortType === 'name-desc') return titleB.localeCompare(titleA);
             if (sortType === 'priority-asc') {
                 if (a.priority !== b.priority) return a.priority - b.priority;
-                return a.title.localeCompare(b.title);
+                return titleA.localeCompare(titleB);
             }
             if (sortType === 'priority-desc') {
                 if (a.priority !== b.priority) return b.priority - a.priority;
-                return b.title.localeCompare(a.title);
+                return titleB.localeCompare(titleA);
             }
         });
 
         listContainer.innerHTML = displayData.length > 0 ? displayData.map(sub => `
             <div class="accordion-item" data-id="${sub.id}">
                 <div class="accordion-header">
-                    <span style="flex-grow:1;">📑 ${sub.title}</span>
+                    <span style="flex-grow:1;">📑 ${sub.title || '제목 없음'}</span>
                     <div style="display:flex; align-items:center;">
                         ${isCurrentUserAdmin ? `
                             <button class="btn-edit-subject" onclick="editSubject(${sub.id}, event)">수정</button>
@@ -235,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const subject = subjects.find(s => s.id === id);
         if (subject) {
             editingId = id;
-            editor.setData(subject.title, subject.content, subject.files);
+            editor.setData(subject.title || '', subject.content || '', subject.files || []);
             toggleEditorTab(true);
         }
     };
@@ -260,15 +266,16 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleEditorTab(true);
     });
 
-    // ⚙️ 개인화 설정 모달 동작 (원본 그대로 유지)
+    // ⚙️ 개인화 설정 모달 동작
     document.getElementById('btn-user-settings')?.addEventListener('click', () => {
         const container = document.getElementById('settings-list');
         if(container) {
             container.innerHTML = subjects.map(sub => {
                 const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
+                // 💡 안전장치 4: 설정 모달에서도 빈 제목 방지
                 return `
                     <div class="setting-item" style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee;">
-                        <label style="cursor:pointer;"><input type="checkbox" class="setting-visible" data-id="${sub.id}" ${setting.visible ? 'checked' : ''}> ${sub.title}</label>
+                        <label style="cursor:pointer;"><input type="checkbox" class="setting-visible" data-id="${sub.id}" ${setting.visible ? 'checked' : ''}> ${sub.title || '제목 없음'}</label>
                         <div>우선순위: <input type="number" class="setting-priority" data-id="${sub.id}" value="${setting.priority}" style="width:40px; text-align:center;"></div>
                     </div>
                 `;
