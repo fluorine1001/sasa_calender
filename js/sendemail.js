@@ -53,6 +53,8 @@ async function sendEmail(toEmail, course, title, due, memo) {
     const memoText = memo ? `\n\n[메모 내용]\n${memo}` : '';
     const templateParams = {
         email: toEmail,
+        task_title: title,
+        course_name: course,
         message: `[${course}] ${title} 과제의 마감이 임박했습니다. (마감: ${due})${memoText}`
     };
 
