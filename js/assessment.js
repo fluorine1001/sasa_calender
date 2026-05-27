@@ -1,15 +1,41 @@
 import { NoticeEditor } from './rich-editor.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 🎨 아코디언 및 리스트 UI용 CSS 자동 주입
+    if (!document.getElementById('accordion-custom-styles')) {
+        const style = document.createElement('style');
+        style.id = 'accordion-custom-styles';
+        style.innerHTML = `
+            .accordion-item { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px; background: #fff; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: box-shadow 0.2s; }
+            .accordion-item:hover { box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+            .accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; cursor: pointer; background: #ffffff; font-weight: 600; font-size: 15px; color: #1e293b; transition: all 0.2s; }
+            .accordion-header:hover { background: #f8fafc; }
+            .accordion-body { display: none; padding: 20px; border-top: 1px solid #e2e8f0; color: #334155; line-height: 1.6; background: #fafbfc; }
+            
+            /* 토글이 열렸을 때(.active)의 스타일 */
+            .accordion-item.active .accordion-body { display: block; animation: fadeIn 0.3s ease-in-out; }
+            .accordion-item.active .accordion-header { background: #f1f5f9; border-bottom: 1px solid #e2e8f0; }
+            .accordion-item.active .accordion-arrow { transform: rotate(180deg); }
+            
+            .accordion-arrow { transition: transform 0.3s; display: inline-block; color: #3b82f6; margin-left: 12px; font-size: 12px; }
+            .btn-edit-subject, .btn-delete-subject { padding: 6px 12px; margin-left: 6px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s; }
+            .btn-edit-subject { background: #e2e8f0; color: #475569; }
+            .btn-edit-subject:hover { background: #cbd5e1; }
+            .btn-delete-subject { background: #fee2e2; color: #ef4444; }
+            .btn-delete-subject:hover { background: #fecaca; }
+            
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        `;
+        document.head.appendChild(style);
+    }
+
     // 1. 과목 데이터 및 설정 데이터 상태 관리
     let subjects = [
-        { id: 1, title: "2026 1학기 국어 평가계획", content: "<p>중간 40%, 기말 40%, 수행 20%</p>", files: [] },
-        { id: 2, title: "2026 1학기 수학 평가계획", content: "<p>수행평가 100%</p>", files: [] }
     ];
     let userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
-    let editingId = null; // 수정 모드 판별용
+    let editingId = null;
 
-    // DOM 요소 (수정됨: 실제 HTML ID 적용)
+    // DOM 요소
     const tabAssessment = document.getElementById('tab-list-view');
     const tabEditor = document.getElementById('tab-editor-view');
     const listContainer = document.getElementById('evaluation-list');
@@ -21,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const editor = new NoticeEditor('editor-container', '<p>수식은 $...$ 로 입력하세요.</p>', {
         onSubmit: async (data) => {
             if (editingId) {
-                // 기존 데이터 수정
                 const idx = subjects.findIndex(s => s.id === editingId);
                 if (idx > -1) {
                     subjects[idx].title = data.title;
@@ -29,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     subjects[idx].files = data.files;
                 }
             } else {
-                // 새 데이터 추가
                 const newId = Date.now();
                 subjects.push({ id: newId, title: data.title, content: data.bodyHtml, files: data.files });
                 userSettings.push({ id: newId, visible: true, priority: 1 });
@@ -44,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 리스트 <-> 에디터 탭 전환 (수정됨: display 속성 조작)
+    // 리스트 <-> 에디터 탭 전환
     function toggleEditorTab(showEditor) {
         if (showEditor) {
             tabAssessment.style.display = 'none';
@@ -55,12 +79,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 3. 리스트 렌더링 (검색 및 정렬 로직 포함)
+    // 3. 리스트 렌더링
     window.renderList = function() {
-        const keyword = searchInput.value.replace(/\s+/g, '').toLowerCase();
-        const sortType = sortSelect.value;
+        const keyword = searchInput?.value.replace(/\s+/g, '').toLowerCase() || '';
+        const sortType = sortSelect?.value || 'name-asc';
 
-        // 가시성 필터링 및 띄어쓰기 무시 검색 적용
         let displayData = subjects.map(sub => {
             const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
             return { ...sub, visible: setting.visible, priority: setting.priority };
@@ -69,11 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return sub.visible && titleNoSpace.includes(keyword);
         });
 
-        // 정렬 적용
         displayData.sort((a, b) => {
             if (sortType === 'name-asc') return a.title.localeCompare(b.title);
             if (sortType === 'name-desc') return b.title.localeCompare(a.title);
-            
             if (sortType === 'priority-asc') {
                 if (a.priority !== b.priority) return a.priority - b.priority;
                 return a.title.localeCompare(b.title);
@@ -84,36 +105,43 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // HTML 렌더링
         listContainer.innerHTML = displayData.length > 0 ? displayData.map(sub => `
             <div class="accordion-item" data-id="${sub.id}">
                 <div class="accordion-header">
-                    <span>${sub.title}</span>
-                    <div>
+                    <span style="flex-grow:1;">📑 ${sub.title}</span>
+                    <div style="display:flex; align-items:center;">
                         <button class="btn-edit-subject" onclick="editSubject(${sub.id}, event)">수정</button>
                         <button class="btn-delete-subject" onclick="deleteSubject(${sub.id}, event)">삭제</button>
-                        <span style="color:#1a73e8; margin-left:8px; font-size:12px;">▼</span>
+                        <span class="accordion-arrow">▼</span>
                     </div>
                 </div>
                 <div class="accordion-body">
                     <div class="ql-editor" style="padding:0; min-height:auto;">
-                        ${sub.content}
+                        ${sub.content || '<span style="color:#999;">내용이 없습니다.</span>'}
                     </div>
+                    ${sub.files && sub.files.length > 0 ? `
+                        <div style="margin-top:15px; padding-top:15px; border-top:1px dashed #cbd5e1;">
+                            <strong style="font-size:13px; color:#475569;">📎 첨부 파일/링크:</strong>
+                            <ul style="list-style:none; padding:0; margin:8px 0 0 0; font-size:13px;">
+                                ${sub.files.map(f => `<li style="margin-bottom:4px;"><a href="${f.url}" target="_blank" style="color:#2563eb; text-decoration:none;">🔗 ${f.name}</a></li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
-        `).join('') : '<div style="text-align:center; padding: 40px; color:#999;">검색 결과가 없거나 표시할 항목이 없습니다.</div>';
+        `).join('') : '<div style="text-align:center; padding: 40px; color:#94a3b8; background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">검색 결과가 없거나 표시할 항목이 없습니다.</div>';
     };
 
     // 아코디언 토글 이벤트 위임
     listContainer.addEventListener('click', (e) => {
         const header = e.target.closest('.accordion-header');
-        // 수정/삭제 버튼 클릭 시 아코디언이 열리지 않도록 예외 처리
+        // 버튼을 누른 경우는 아코디언이 토글되지 않도록 방어
         if (header && !e.target.closest('button')) {
-            header.parentElement.classList.toggle('active');
+            const item = header.parentElement;
+            item.classList.toggle('active');
         }
     });
 
-    // 항목 수정 (에디터에 기존 데이터 셋업)
     window.editSubject = function(id, event) {
         event.stopPropagation();
         const subject = subjects.find(s => s.id === id);
@@ -124,72 +152,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // 항목 삭제
     window.deleteSubject = function(id, event) {
         event.stopPropagation();
-        if (confirm("정말 이 평가 계획을 삭제하시겠습니까?")) {
+        if (confirm("정말 이 항목을 삭제하시겠습니까?")) {
             subjects = subjects.filter(s => s.id !== id);
             userSettings = userSettings.filter(s => s.id !== id);
             renderList();
         }
     };
 
-    // 새 계획 추가 버튼 클릭
-    document.getElementById('btn-admin-add').addEventListener('click', () => {
+    // 이벤트 리스너 바인딩
+    document.getElementById('btn-admin-add')?.addEventListener('click', () => {
         editingId = null;
         editor.reset();
         toggleEditorTab(true);
     });
 
-    // 4. 모달 관련 로직 (보기 설정 및 우선순위 설정)
-    function renderSettings() {
+    document.getElementById('btn-user-settings')?.addEventListener('click', () => {
         const container = document.getElementById('settings-list');
-        container.innerHTML = subjects.map(sub => {
-            const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
-            return `
-                <div class="setting-item">
-                    <label>
-                        <input type="checkbox" class="setting-visible" data-id="${sub.id}" ${setting.visible ? 'checked' : ''}>
-                        ${sub.title}
-                    </label>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="font-size:12px; color:#666;">우선순위</span>
-                        <input type="number" class="setting-priority" data-id="${sub.id}" value="${setting.priority}">
+        if(container) {
+            container.innerHTML = subjects.map(sub => {
+                const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
+                return `
+                    <div class="setting-item" style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee;">
+                        <label style="cursor:pointer;"><input type="checkbox" class="setting-visible" data-id="${sub.id}" ${setting.visible ? 'checked' : ''}> ${sub.title}</label>
+                        <div>우선순위: <input type="number" class="setting-priority" data-id="${sub.id}" value="${setting.priority}" style="width:40px; text-align:center;"></div>
                     </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    document.getElementById('btn-user-settings').addEventListener('click', () => {
-        renderSettings();
-        settingsModal.style.display = 'flex';
+                `;
+            }).join('');
+        }
+        if(settingsModal) settingsModal.style.display = 'flex';
     });
 
-    document.getElementById('btn-close-settings').addEventListener('click', () => {
+    document.getElementById('btn-close-settings')?.addEventListener('click', () => {
         document.querySelectorAll('.setting-item').forEach(item => {
             const checkbox = item.querySelector('.setting-visible');
             const numberInput = item.querySelector('.setting-priority');
             const id = parseInt(checkbox.dataset.id);
-            
             const setting = userSettings.find(s => s.id === id);
             if (setting) {
                 setting.visible = checkbox.checked;
                 setting.priority = parseInt(numberInput.value) || 1;
             }
         });
-        settingsModal.style.display = 'none';
+        if(settingsModal) settingsModal.style.display = 'none';
         renderList();
     });
 
-    document.getElementById('btn-reset-settings').addEventListener('click', () => {
+    document.getElementById('btn-reset-settings')?.addEventListener('click', () => {
         userSettings.forEach(s => { s.visible = true; s.priority = 1; });
-        renderSettings();
+        document.getElementById('btn-user-settings').click(); // 모달 리렌더링
     });
 
-    // 검색 및 정렬 이벤트
-    searchInput.addEventListener('input', renderList);
-    sortSelect.addEventListener('change', renderList);
+    searchInput?.addEventListener('input', renderList);
+    sortSelect?.addEventListener('change', renderList);
 
     // 초기 렌더링
     renderList();
