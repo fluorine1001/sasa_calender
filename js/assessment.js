@@ -1,7 +1,24 @@
+import { db } from './firebase-init.js';
+import { 
+    doc, getDoc, setDoc, updateDoc, onSnapshot 
+} from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
 
+console.log("🚀 assessment.js 로드 완료 (관리자 권한 제어 및 실시간 동기화 적용)");
+
+// 💡 전역 상태 및 권한 변수
+let currentUid = null;
+let isCurrentUserAdmin = false;
+let unsubscribeAssessments = null;
+
+// 기존 상태 관리
+let subjects = []; 
+let userSettings = [];
+let editingId = null;
+
 document.addEventListener('DOMContentLoaded', () => {
-    // 🎨 아코디언 및 리스트 UI용 CSS 자동 주입
+    // 🎨 아코디언 및 리스트 UI용 CSS 자동 주입 (원본 유지)
     if (!document.getElementById('accordion-custom-styles')) {
         const style = document.createElement('style');
         style.id = 'accordion-custom-styles';
@@ -29,12 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.head.appendChild(style);
     }
 
-    // 1. 과목 데이터 및 설정 데이터 상태 관리
-    let subjects = [
-    ];
-    let userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
-    let editingId = null;
-
     // DOM 요소
     const tabAssessment = document.getElementById('tab-list-view');
     const tabEditor = document.getElementById('tab-editor-view');
@@ -42,24 +53,96 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search-input');
     const sortSelect = document.getElementById('sort-select');
     const settingsModal = document.getElementById('settings-modal');
+    const btnAdminAdd = document.getElementById('btn-admin-add');
 
-    // 2. NoticeEditor 인스턴스화
+    // ==========================================
+    // 🔐 Auth 및 실시간 데이터 연동 (신규 추가)
+    // ==========================================
+    const auth = getAuth();
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            currentUid = user.uid;
+            try {
+                const userDoc = await getDoc(doc(db, `users/${currentUid}`));
+                isCurrentUserAdmin = (userDoc.exists() && userDoc.data().isAdmin === true);
+            } catch (error) {
+                console.error("권한 체크 에러:", error);
+                isCurrentUserAdmin = false;
+            }
+            loadAssessmentPlans(); 
+        } else {
+            currentUid = null;
+            isCurrentUserAdmin = false;
+            if (unsubscribeAssessments) unsubscribeAssessments();
+            subjects = [];
+            renderList();
+        }
+    });
+
+    async function loadAssessmentPlans() {
+        if (unsubscribeAssessments) unsubscribeAssessments();
+        const assessmentRef = doc(db, 'system', 'assessments');
+
+        if (isCurrentUserAdmin) {
+            const docSnap = await getDoc(assessmentRef);
+            if (!docSnap.exists()) await setDoc(assessmentRef, { plans: [] });
+            if (btnAdminAdd) btnAdminAdd.style.display = 'inline-block'; // 관리자일 때만 추가 버튼 표시
+        } else {
+            if (btnAdminAdd) btnAdminAdd.style.display = 'none';
+        }
+
+        unsubscribeAssessments = onSnapshot(assessmentRef, (docSnap) => {
+            if (docSnap.exists()) {
+                subjects = docSnap.data().plans || [];
+            } else {
+                subjects = [];
+            }
+            
+            // 💡 새로 추가된 과목이 있다면 로컬 userSettings에도 기본값(보임) 추가 보정
+            subjects.forEach(sub => {
+                if (!userSettings.find(s => s.id === sub.id)) {
+                    userSettings.push({ id: sub.id, visible: true, priority: 1 });
+                }
+            });
+            
+            renderList();
+        });
+    }
+
+    // ==========================================
+    // ✍️ 에디터 설정 (수정 시 로컬 배열 대신 Firestore 업데이트)
+    // ==========================================
     const editor = new NoticeEditor('editor-container', '<p>수식은 $...$ 로 입력하세요.</p>', {
         onSubmit: async (data) => {
+            if (!isCurrentUserAdmin) return alert("수정 권한이 없습니다.");
+
+            const assessmentRef = doc(db, 'system', 'assessments');
+            let updatedSubjects = [...subjects];
+
             if (editingId) {
-                const idx = subjects.findIndex(s => s.id === editingId);
+                const idx = updatedSubjects.findIndex(s => s.id === editingId);
                 if (idx > -1) {
-                    subjects[idx].title = data.title;
-                    subjects[idx].content = data.bodyHtml;
-                    subjects[idx].files = data.files;
+                    updatedSubjects[idx] = { 
+                        ...updatedSubjects[idx], 
+                        title: data.title, 
+                        content: data.bodyHtml, 
+                        files: data.files 
+                    };
                 }
             } else {
                 const newId = Date.now();
-                subjects.push({ id: newId, title: data.title, content: data.bodyHtml, files: data.files });
-                userSettings.push({ id: newId, visible: true, priority: 1 });
+                updatedSubjects.push({ 
+                    id: newId, 
+                    title: data.title, 
+                    content: data.bodyHtml, 
+                    files: data.files 
+                });
             }
+
+            // DB 업데이트 (이후 onSnapshot이 트리거되어 화면이 자동 갱신됨)
+            await updateDoc(assessmentRef, { plans: updatedSubjects });
+            
             editingId = null;
-            renderList();
             toggleEditorTab(false);
         },
         onCancel: () => {
@@ -68,7 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 리스트 <-> 에디터 탭 전환
     function toggleEditorTab(showEditor) {
         if (showEditor) {
             tabAssessment.style.display = 'none';
@@ -79,7 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 3. 리스트 렌더링
+    // ==========================================
+    // 🖥️ 리스트 렌더링 (원본 로직 유지 + 관리자 버튼 조건부 렌더링)
+    // ==========================================
     window.renderList = function() {
         const keyword = searchInput?.value.replace(/\s+/g, '').toLowerCase() || '';
         const sortType = sortSelect?.value || 'name-asc';
@@ -110,8 +194,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="accordion-header">
                     <span style="flex-grow:1;">📑 ${sub.title}</span>
                     <div style="display:flex; align-items:center;">
-                        <button class="btn-edit-subject" onclick="editSubject(${sub.id}, event)">수정</button>
-                        <button class="btn-delete-subject" onclick="deleteSubject(${sub.id}, event)">삭제</button>
+                        ${isCurrentUserAdmin ? `
+                            <button class="btn-edit-subject" onclick="editSubject(${sub.id}, event)">수정</button>
+                            <button class="btn-delete-subject" onclick="deleteSubject(${sub.id}, event)">삭제</button>
+                        ` : ''}
                         <span class="accordion-arrow">▼</span>
                     </div>
                 </div>
@@ -132,10 +218,11 @@ document.addEventListener('DOMContentLoaded', () => {
         `).join('') : '<div style="text-align:center; padding: 40px; color:#94a3b8; background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">검색 결과가 없거나 표시할 항목이 없습니다.</div>';
     };
 
-    // 아코디언 토글 이벤트 위임
+    // ==========================================
+    // 🖱️ 이벤트 리스너 및 액션
+    // ==========================================
     listContainer.addEventListener('click', (e) => {
         const header = e.target.closest('.accordion-header');
-        // 버튼을 누른 경우는 아코디언이 토글되지 않도록 방어
         if (header && !e.target.closest('button')) {
             const item = header.parentElement;
             item.classList.toggle('active');
@@ -144,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.editSubject = function(id, event) {
         event.stopPropagation();
+        if (!isCurrentUserAdmin) return;
         const subject = subjects.find(s => s.id === id);
         if (subject) {
             editingId = id;
@@ -152,22 +240,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.deleteSubject = function(id, event) {
+    window.deleteSubject = async function(id, event) {
         event.stopPropagation();
-        if (confirm("정말 이 항목을 삭제하시겠습니까?")) {
-            subjects = subjects.filter(s => s.id !== id);
-            userSettings = userSettings.filter(s => s.id !== id);
-            renderList();
+        if (!isCurrentUserAdmin) return;
+        
+        if (confirm("정말 이 항목을 삭제하시겠습니까? (서버에서도 영구 삭제됩니다)")) {
+            const updatedSubjects = subjects.filter(s => s.id !== id);
+            const assessmentRef = doc(db, 'system', 'assessments');
+            await updateDoc(assessmentRef, { plans: updatedSubjects }); // DB 반영
+            
+            userSettings = userSettings.filter(s => s.id !== id); // 로컬 설정 정리
         }
     };
 
-    // 이벤트 리스너 바인딩
-    document.getElementById('btn-admin-add')?.addEventListener('click', () => {
+    btnAdminAdd?.addEventListener('click', () => {
+        if (!isCurrentUserAdmin) return alert("관리자만 작성할 수 있습니다.");
         editingId = null;
         editor.reset();
         toggleEditorTab(true);
     });
 
+    // ⚙️ 개인화 설정 모달 동작 (원본 그대로 유지)
     document.getElementById('btn-user-settings')?.addEventListener('click', () => {
         const container = document.getElementById('settings-list');
         if(container) {
@@ -201,12 +294,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-reset-settings')?.addEventListener('click', () => {
         userSettings.forEach(s => { s.visible = true; s.priority = 1; });
-        document.getElementById('btn-user-settings').click(); // 모달 리렌더링
+        document.getElementById('btn-user-settings').click(); 
     });
 
     searchInput?.addEventListener('input', renderList);
     sortSelect?.addEventListener('change', renderList);
-
-    // 초기 렌더링
-    renderList();
 });
