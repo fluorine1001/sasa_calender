@@ -1,170 +1,95 @@
 // js/sasadomi.js
 import { db } from './firebase-init.js';
-import { doc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
-const auth = getAuth();
-let userUid = null;
-let sasaLinked = false;
-let unsubscribeGlobals = null;
-const CACHE_DURATION = 30 * 60 * 1000; // 💡 정확히 30분 만료 제한 설정
+let currentUid = null;
 
-window.triggerSasaTabLoad = () => {
-    console.log("🦊 [사사도미] 메인 코어 가동.");
-    verifyAndLoadSasaData(false);
-};
+function initSasadomi() {
+    console.log("[Sasadomi] 모듈 초기화 시작...");
 
-onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        userUid = user.uid;
-        const userSnap = await getDoc(doc(db, "users", userUid));
-        sasaLinked = userSnap.exists() && userSnap.data().isSasaLinked === true;
-        
-        toggleSasaPanels();
-        if(sasaLinked) {
-            verifyAndLoadSasaData(false);
-            listenGlobalRules(userSnap.data().isAdmin === true);
-        }
-    }
-});
-
-function toggleSasaPanels() {
-    const overlay = document.getElementById('sasa-unlinked-overlay');
-    const content = document.getElementById('sasa-linked-content');
-    const refreshBtn = document.getElementById('btn-sasa-refresh');
-
-    if(sasaLinked) {
-        if(overlay) overlay.style.display = 'none';
-        if(content) content.style.display = 'grid';
-        if(refreshBtn) refreshBtn.style.display = 'block';
-    } else {
-        if(overlay) overlay.style.display = 'block';
-        if(content) content.style.display = 'none';
-        if(refreshBtn) refreshBtn.style.display = 'none';
-    }
-}
-
-// 🔄 핵심: 고도화된 캐시 우회 및 수동 동기화 지원 데이터 로더
-async function verifyAndLoadSasaData(forceRefresh = false) {
-    if (!userUid || !sasaLinked) return;
-
-    const cacheKey = `sasa_cache_${userUid}`;
-    const cachedDataString = localStorage.getItem(cacheKey);
-    let cacheValid = false;
-
-    if (cachedDataString && !forceRefresh) {
-        const cache = JSON.parse(cachedDataString);
-        if (Date.now() - cache.timestamp < CACHE_DURATION) {
-            cacheValid = true;
-            console.log("📦 [캐싱 레이어] 유효시간 내의 로컬 캐시 데이터를 렌더링합니다.");
-            renderSasaCoreMetrics(cache.data);
-            return;
-        }
-    }
-
-    // 캐시가 만료되었거나 강제 새로고침인 경우 실제 원격 API 프록시 연동 수행
-    console.log("🌐 [원격 통신] 사사도미 실시간 API 동기화 구동 중...");
-    try {
-        // 실제 운영 환경에서는 세션 토큰을 헤더에 실어 백엔드로 요청합니다.
-        // const response = await fetch('/api/sasa-data-bridge');
-        // const remoteData = await response.json();
-        
-        // 가상 실시간 모킹 스냅샷 데이터 정의
-        const remoteMockData = {
-            totalScore: -4,
-            history: [
-                { reason: "심야 전자기기 무단 사용 조치", score: -3, date: "2026-05-28" },
-                { reason: "생활관 호실 정돈 우수", score: 1, date: "2026-05-15" },
-                { reason: "면학 정숙 지도 위반", score: -2, date: "2026-05-02" }
-            ],
-            studyStatus: "1타임 [도서관 지정석] 신청 완료",
-            outingStatus: "승인된 외출 내역 없음"
-        };
-
-        // 로컬 브라우저 저장소 캐시 갱신 처리
-        const newCacheObj = {
-            timestamp: Date.now(),
-            data: remoteMockData
-        };
-        localStorage.setItem(cacheKey, JSON.stringify(newCacheObj));
-        renderSasaCoreMetrics(remoteMockData);
-        
-    } catch (err) {
-        console.error("사사도미 데이터 원격 로드 에러:", err);
-    }
-}
-
-function renderSasaCoreMetrics(data) {
-    const scoreDisplay = document.getElementById('total-score');
-    const statusText = document.getElementById('score-status-text');
-    const listContainer = document.getElementById('penalty-list');
-    const studyStatusText = document.getElementById('sasa-study-status');
-    const outingStatusText = document.getElementById('sasa-outing-status');
-
-    if(scoreDisplay) scoreDisplay.innerText = data.totalScore;
-    
-    // 배지 스타일 매핑 및 경고 고도화
-    if(statusText) {
-        if(data.totalScore < 0) {
-            statusText.innerHTML = `<span style="color:#d93025; font-weight:bold;">주의: 벌점 누적 상태</span>`;
+    // 1. 현재 로그인한 유저 확인 (Firebase Auth)
+    const auth = getAuth();
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUid = user.uid;
+            console.log("[Sasadomi] 유저 인식 완료:", currentUid);
+            // TODO: 나중에 여기에 연동 상태를 체크해서 배지(연동/미연동)를 바꿔주는 함수 추가
         } else {
-            statusText.innerHTML = `<span style="color:#1e8e3e; font-weight:bold;">안전: 상점 우위 상태</span>`;
+            currentUid = null;
         }
+    });
+
+    // 2. 모달 및 버튼 DOM 요소 가져오기
+    const openBtn = document.getElementById('btn-open-sasa-modal');
+    const modal = document.getElementById('sasa-auth-modal');
+    const closeBtn = document.getElementById('btn-close-sasa-modal');
+    const cancelBtn = document.getElementById('btn-cancel-sasa-auth');
+    const form = document.getElementById('sasa-credential-form');
+
+    // 3. 모달 열기 기능
+    if (openBtn && modal) {
+        openBtn.addEventListener('click', () => {
+            modal.style.display = 'flex'; // 화면에 표시
+        });
     }
 
-    if(studyStatusText) studyStatusText.innerText = data.studyStatus;
-    if(outingStatusText) outingStatusText.innerText = data.outingStatus;
+    // 4. 모달 닫기 기능 (닫을 때 입력했던 비밀번호도 안전하게 초기화)
+    const closeModal = () => {
+        if (modal) modal.style.display = 'none';
+        if (form) form.reset(); 
+    };
 
-    if(listContainer) {
-        listContainer.innerHTML = '';
-        data.history.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'cl-list-item';
-            div.style.marginBottom = '6px';
-            const color = item.score > 0 ? '#1e8e3e' : '#d93025';
-            div.innerHTML = `
-                <div>
-                    <span style="font-size:13px; font-weight:bold;">${item.reason}</span>
-                    <br><small style="color:#888;">${item.date}</small>
-                </div>
-                <span style="color:${color}; font-weight:bold;">${item.score > 0 ? '+'+item.score : item.score}점</span>
-            `;
-            listContainer.appendChild(div);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+    // 5. 폼 제출 (계정 연동하기) 로직
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault(); // 페이지 새로고침 방지
+
+            if (!currentUid) return alert("로그인이 필요합니다. 먼저 로그인해주세요.");
+
+            const sasaId = document.getElementById('sasa-input-id').value.trim();
+            const sasaPw = document.getElementById('sasa-input-pw').value;
+
+            if (!sasaId || !sasaPw) return alert("아이디와 비밀번호를 모두 입력해주세요.");
+
+            try {
+                // 🔒 보안 처리: 비밀번호는 저장하지 않고 가짜 토큰을 생성해 유저 문서에 저장
+                const mockSessionToken = "SASA_SESSION_TOKEN_" + btoa(sasaId + ":" + Date.now()); 
+
+                const userConfigRef = doc(db, "users", currentUid);
+                
+                // { merge: true }를 사용하여 기존 유저 설정(알림 등)을 덮어쓰지 않고 보존!
+                await setDoc(userConfigRef, {
+                    isSasaLinked: true,
+                    sasaStudentId: sasaId,
+                    sasaToken: mockSessionToken,
+                    sasaLinkedAt: serverTimestamp()
+                }, { merge: true });
+                
+                alert("사사도미 계정이 성공적으로 연동되었습니다!");
+                
+                // 모달 닫기
+                closeModal();
+                
+                // 연동 성공 시 뱃지 상태 즉시 변경
+                const badge = document.getElementById('sasa-link-badge');
+                if (badge) {
+                    badge.innerText = "연동 완료";
+                    badge.className = "status-badge status-linked";
+                }
+                
+                // TODO: 나중에 여기에 사사도미 탭의 잠금을 해제하고 데이터를 불러오는 로직 추가
+
+            } catch (error) {
+                console.error("사사도미 연동 실패:", error);
+                alert("연동에 실패했습니다. 관리자에게 문의하세요.");
+            }
         });
     }
 }
 
-// 기존 merit.js 내에 완벽히 구축되어 있던 "벌점 부과 사유" 리스트 결합 보존
-function listenGlobalRules(isAdmin) {
-    if (unsubscribeGlobals) unsubscribeGlobals();
-    const settingsRef = doc(db, 'system', 'globals');
-
-    unsubscribeGlobals = onSnapshot(settingsRef, (docSnap) => {
-        if (docSnap.exists()) {
-            const rules = docSnap.data().rules || [];
-            const container = document.getElementById('discipline-list-container');
-            if(!container) return;
-
-            let html = '<div style="display:flex; flex-direction:column; gap:6px;">';
-            rules.forEach((group, idx) => {
-                html += `
-                    <div style="background:#fff; border:1px solid #fad2cf; border-radius:6px; padding:10px;">
-                        <strong style="color:#c5221f; font-size:13px;">📊 ${group.score || group}</strong>
-                        <ul style="margin:5px 0 0 0; padding-left:15px; font-size:12px; color:#555;">
-                `;
-                if(group.reasons) {
-                    group.reasons.forEach(r => { html += `<li style="margin-bottom:3px;">${r}</li>`; });
-                }
-                html += `</ul></div>`;
-            });
-            html += '</div>';
-            container.innerHTML = html;
-        }
-    });
-}
-
-// 🔄 수동 동기화 컴포넌트 버튼 이벤트 리스너 바인딩
-document.getElementById('btn-sasa-refresh').addEventListener('click', () => {
-    verifyAndLoadSasaData(true); // forceRefresh 플래그 주입
-    alert("🔄 최신 사사도미 원격 원장이 동기화 및 캐싱되었습니다.");
-});
+// HTML 렌더링이 완료되면 위 기능들을 활성화
+document.addEventListener('DOMContentLoaded', initSasadomi);
