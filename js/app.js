@@ -20,15 +20,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 1-2. 콘텐츠 섹션 표시/숨김 처리
+        // 1-2. 콘텐츠 섹션 표시/숨김 처리 (⚠️ 누락되었던 display 속성 제어 복구)
         tabContents.forEach(content => {
             content.classList.remove('active');
             if (content.id === targetId) {
                 content.classList.add('active');
+                content.style.display = 'block'; // 명시적으로 화면에 표시
+            } else {
+                content.style.display = 'none';  // 나머지는 명시적으로 숨김
             }
         });
 
-        // 1-3. 현재 열어본 탭을 브라우저 로컬 스토리지에 저장 (새로고침 시 복구용)
+        // 1-3. 현재 열어본 탭을 브라우저 로컬 스토리지에 저장 (새로고침 복구용)
         localStorage.setItem('sasa_last_active_tab', targetId);
 
         // 1-4. 각 탭에 맞는 데이터 불러오기(Hook) 실행
@@ -38,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (targetId === 'sasadomi' && typeof window.triggerSasaTabLoad === 'function') {
             window.triggerSasaTabLoad();
         }
-        // (기존의 캘린더나 다른 탭의 로드 함수가 있다면 여기에 추가 가능)
     }
 
     // 💡 2. 사용자가 직접 메뉴를 클릭했을 때의 이벤트 바인딩
@@ -50,12 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 💡 3. 초기 접속 및 새로고침 시 마지막 탭을 복원하고 데이터 로드 강제 실행
-    // 모듈 스크립트(dashboard.js 등)가 window 객체에 함수를 등록할 수 있도록 약간의 딜레이(100ms) 부여
     setTimeout(() => {
         // 저장된 탭이 없으면 기본값인 'dashboard'를 엽니다.
         const savedTab = localStorage.getItem('sasa_last_active_tab') || 'dashboard';
-        
-        // 해당 탭을 여는 함수를 강제로 실행합니다.
         switchTab(savedTab);
     }, 100);
 });
