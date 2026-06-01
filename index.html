@@ -344,7 +344,7 @@
                 <li class="nav-item active" data-target="dashboard">대시보드</li>
                 <li class="nav-item" data-target="calendar">캘린더</li>
                 <li class="nav-item" data-target="tasks">과제/공지</li>
-                <li class="nav-item" data-target="penalty">벌점 관리</li>
+                <li class="nav-item" data-target="sasadomi">사사도미</li>
                 <li class="nav-item" data-target="timeplan">시간 계획</li>
                 <li class="nav-item" data-target="eval">과목 평가 계획</li>
                 <li class="nav-item" data-target="settings">설정</li>
@@ -376,6 +376,16 @@
             <section id="dashboard" class="tab-content"> 
                 <h1>대시보드</h1>
                 <p>환영합니다! 오늘의 일정을 확인하세요.</p>
+
+                <div class="global-section notice-box" style="border-left: 4px solid #1a73e8; margin-top:20px; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+                    <div class="notice-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:10px;">
+                        <div class="notice-summary" style="display:flex; align-items:center; gap:10px;">
+                            <span class="badge-notice" style="background:#1a73e8; color:#fff; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:bold;">📢 공지사항</span>
+                            <span id="latest-notice-title" style="font-weight: 600; color: #333; font-size:16px;">데이터를 불러오는 중...</span>
+                        </div>
+                    </div>
+                    <div id="notice-list-container" class="cl-list" style="margin-top: 15px;"></div>
+                </div>
             </section>
 
             <section id="tasks" class="tab-content">
@@ -393,66 +403,50 @@
                 <div id="tasks-list"></div>
             </section>
 
-            <section id="penalty" class="tab-content">
+            <section id="sasadomi" class="tab-content" style="display:none;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-                    <h1 style="margin: 0;">상/벌점 관리</h1>
+                    <h1 style="margin: 0;">🦊 사사도미 통합 관리 시스템</h1>
+                    <button id="btn-sasa-refresh" class="cl-btn-primary" style="background:#34a853; display:none;">🔄 강제 동기화 (캐시 초기화)</button>
                 </div>
-
-                <div class="global-section notice-box" style="border-left: 4px solid #d93025;">
-                    <div class="notice-header" id="notice-accordion-toggle">
-                        <div class="notice-summary">
-                            <span class="badge-notice">📢 공지</span>
-                            <span id="latest-notice-title" style="font-weight: 500; color: #333;">데이터를 불러오는 중...</span>
-                        </div>
-                        <button class="btn-toggle-arrow" id="arrow-icon">▼</button>
-                    </div>
-                    <div class="notice-body collapsed" id="notice-list-container"></div>
+            
+                <div id="sasa-unlinked-overlay" class="card" style="padding: 40px; text-align: center; background:#fff; border-radius:12px;">
+                    <p style="font-size: 16px; color: #5f6368; font-weight: 500;">🔒 사사도미 서비스가 연동되지 않았습니다.</p>
+                    <p style="font-size: 14px; color: #80868b; margin-bottom: 20px;">[설정] 탭의 사사도미 시스템 연동 메뉴에서 통합 인증을 먼저 진행해 주세요.</p>
                 </div>
-
-                <div class="penalty-grid">
-                    <div class="penalty-left">
-                        <div class="card summary-card">
-                            <h2>나의 누적 점수</h2>
-                            <div class="total-score-display">
-                                <span id="total-score">0</span> 점
+            
+                <div id="sasa-linked-content" style="display: none; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="sasa-left-column" style="display:flex; flex-direction:column; gap:20px;">
+                        <div class="card" style="background:#fff; padding:20px; border-radius:12px;">
+                            <h3>📊 나의 상벌점 현황</h3>
+                            <div style="display: flex; align-items: center; justify-content: space-around; padding: 15px 0;">
+                                <div style="text-align: center;">
+                                    <span style="font-size: 14px; color: #666;">누적 점수</span>
+                                    <div id="total-score" class="total-score-display" style="font-size: 32px; font-weight: bold; margin-top: 5px;">0</div>
+                                </div>
+                                <div id="score-status-text" style="font-size: 14px; color: #555; font-weight: 500;">불러오는 중...</div>
                             </div>
-                            <p id="score-status-text" style="color: #666; font-size: 14px; margin-top: 10px;">기록이 없습니다.</p>
+                            <div id="penalty-list" class="cl-list" style="max-height: 220px; overflow-y: auto; margin-top:10px;"></div>
                         </div>
-
-                        <div class="card">
-                            <h3>새 내역 추가</h3>
-                            <form id="penalty-form">
-                                <div class="form-group">
-                                    <label for="point-type">구분 (필수)</label>
-                                    <select id="point-type" required>
-                                        <option value="merit">상점 (+)</option>
-                                        <option value="demerit">벌점 (-)</option>
-                                    </select>
+                        
+                        <div class="card" style="background:#fff; padding:20px; border-radius:12px;">
+                            <h3>⚡ 학사 원격 제어 (자습/외출)</h3>
+                            <div style="display:flex; flex-direction:column; gap:12px; margin-top:15px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:#f8fafc; border-radius:6px;">
+                                    <div><span style="font-weight:bold; font-size:14px; color:#2c3e50;">🌙 오늘 야간 자율학습</span></div>
+                                    <button id="btn-toggle-study" class="cl-btn-primary" style="padding:6px 14px; font-size:12px;">자습 신청 대행</button>
                                 </div>
-                                <div class="form-group">
-                                    <label for="point-value">점수 (필수)</label>
-                                    <input type="number" id="point-value" min="1" required placeholder="예: 3">
+                                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:#f8fafc; border-radius:6px;">
+                                    <div><span style="font-weight:bold; font-size:14px; color:#2c3e50;">🚶 외출 및 외박 신청</span></div>
+                                    <button id="btn-apply-outing" class="cl-btn-primary" style="padding:6px 14px; font-size:12px; background:#e2e8f0; color:#334155;">외출 신청 작성</button>
                                 </div>
-                                <div class="form-group">
-                                    <label for="point-reason">사유 (선택)</label>
-                                    <input type="text" id="point-reason" placeholder="예: 아침 청소 당번 우수">
-                                </div>
-                                <button type="submit" class="cl-btn-primary" style="width: 100%; margin-top: 10px;">기록 추가하기</button>
-                            </form>
+                            </div>
                         </div>
                     </div>
-
-                    <div class="penalty-right">
-                        <div class="card">
-                            <h3>나의 기록 내역</h3>
-                            <div id="penalty-list" class="cl-list" style="max-height: 300px; overflow-y: auto;">
-                            </div>
-                        </div>
-
-                        <div class="global-section discipline-box" style="background-color: #fce8e6; border: 1px solid #fad2cf;">
-                            <h3 style="color: #c5221f; margin-top: 0; margin-bottom: 15px;">⚠️ 벌점 부과 사유</h3>
-                            <div id="discipline-list-container" class="cl-list">
-                            </div>
+            
+                    <div class="sasa-right-column">
+                        <div class="global-section discipline-box" style="background-color: #fce8e6; border: 1px solid #fad2cf; border-radius:12px; padding:20px; margin:0;">
+                            <h3 style="color: #c5221f; margin-top: 0; margin-bottom: 15px;">⚠️ 학교생활규정 벌점 부과 사유</h3>
+                            <div id="discipline-list-container" class="cl-list"></div>
                         </div>
                     </div>
                 </div>
@@ -529,6 +523,20 @@
                         <div class="action-buttons">
                             <button id="btn-link-classroom" class="cl-btn-primary" style="padding: 10px 18px;">구글 계정 연결하기</button>
                             <button id="btn-unlink-classroom" style="display: none; background-color: #f8f9fa; border: 1px solid #ddd; color: #555; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; margin-left: 10px;">연결 해제</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="background: #fff; padding: 20px; border-radius: 12px; margin-top: 20px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 12px; margin-bottom: 15px;">
+                        <h3 style="margin: 0; color: #2c3e50;">🦊 사사도미 통합 계정 인증 관리</h3>
+                        <span id="sasa-link-badge" class="status-badge status-unlinked">미연동</span>
+                    </div>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 15px;">사사도미 계정을 연동하면 실시간 상벌점 통계와 원격 신청 기능이 활성화됩니다.</p>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div id="sasa-user-meta" style="font-size:13px; font-weight:600; color:#475569;">연동된 계정 정보가 없습니다.</div>
+                        <div id="sasa-action-group">
+                            <button id="btn-open-sasa-modal" class="cl-btn-primary">계정 연동하기</button>
                         </div>
                     </div>
                 </div>
@@ -746,5 +754,31 @@
             });
         }
     </script>
+    
+    <div id="sasa-auth-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1010; align-items: center; justify-content: center;">
+        <div class="cl-modal-box" style="width:400px;">
+            <div class="cl-modal-header">
+                <h3>🔒 사사도미 계정 보안 인증</h3>
+                <button type="button" class="cl-modal-close" id="btn-close-sasa-modal">✕</button>
+            </div>
+            <form id="sasa-credential-form" style="padding:24px; display:flex; flex-direction:column; gap:14px;">
+                <div class="form-group">
+                    <label style="display:block; font-size:12px; color:#4b5563; margin-bottom:4px; font-weight:600;">아이디 (학번)</label>
+                    <input type="text" id="sasa-input-id" required placeholder="예: 20261111" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                </div>
+                <div class="form-group">
+                    <label style="display:block; font-size:12px; color:#4b5563; margin-bottom:4px; font-weight:600;">비밀번호 (보안 전송)</label>
+                    <input type="password" id="sasa-input-pw" required placeholder="비밀번호" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                </div>
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button type="button" id="btn-cancel-sasa-auth" style="flex:1; padding:10px; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:6px; cursor:pointer;">취소</button>
+                    <button type="submit" class="cl-btn-primary" style="flex:1;">안전하게 연동</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="js/dashboard.js"></script>
+    <script type="module" src="js/sasadomi.js"></script>
 </body>
 </html>
