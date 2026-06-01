@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 1-2. 콘텐츠 섹션 표시/숨김 처리 (⚠️ 누락되었던 display 속성 제어 복구)
+        // 1-2. 콘텐츠 섹션 표시/숨김 처리
         tabContents.forEach(content => {
             content.classList.remove('active');
             if (content.id === targetId) {
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 1-3. 현재 열어본 탭을 브라우저 로컬 스토리지에 저장 (새로고침 복구용)
+        // 1-3. 현재 열어본 탭을 브라우저 로컬 스토리지에 저장 (같은 세션 내 새로고침 복구용)
         localStorage.setItem('sasa_last_active_tab', targetId);
 
         // 1-4. 각 탭에 맞는 데이터 불러오기(Hook) 실행
@@ -51,10 +51,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 💡 3. 초기 접속 및 새로고침 시 마지막 탭을 복원하고 데이터 로드 강제 실행
+    // 💡 3. 초기 접속 및 새로고침 제어 로직 (사이트 처음 진입 시 항상 대시보드로 강제 고정)
     setTimeout(() => {
-        // 저장된 탭이 없으면 기본값인 'dashboard'를 엽니다.
-        const savedTab = localStorage.getItem('sasa_last_active_tab') || 'dashboard';
-        switchTab(savedTab);
+        let targetTab = 'dashboard';
+
+        // 현재 탭(탭 세션) 내에서 F5를 누른 새로고침인 경우에만 이전 탭 기록을 유지합니다.
+        // 브라우저를 완전히 새로 켜거나 사이트를 새로 입력해 들어온 경우(=처음 열었을 때)는 무조건 dashboard로 시작합니다.
+        if (sessionStorage.getItem('sasa_session_active') === 'true') {
+            targetTab = localStorage.getItem('sasa_last_active_tab') || 'dashboard';
+        } else {
+            // 사이트에 처음 진입했음을 마킹합니다. (이후 새로고침은 세션으로 인정)
+            sessionStorage.setItem('sasa_session_active', 'true');
+        }
+
+        switchTab(targetTab);
     }, 100);
 });
