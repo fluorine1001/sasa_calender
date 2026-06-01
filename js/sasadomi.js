@@ -282,6 +282,10 @@ async function loadApplicationData() {
     const studyContainer = document.getElementById('study-list-container');
     const outContainer = document.getElementById('out-list-container');
     
+    // 💡 시각적 즉각 반응을 위한 로딩 UI 삽입
+    if (studyContainer) studyContainer.innerHTML = '<div style="text-align:center; color:#94a3b8; font-size:13px; padding:15px;">데이터 갱신 중...⏳</div>';
+    if (outContainer) outContainer.innerHTML = '<div style="text-align:center; color:#94a3b8; font-size:13px; padding:15px;">데이터 갱신 중...⏳</div>';
+
     try {
         const url = `${API_BASE_URL}/v1/applications?studentId=${savedSasaId}&token=${savedSasaToken}`;
         const response = await fetch(url, { method: 'GET', headers: { 'x-api-key': API_KEY } });
@@ -361,7 +365,8 @@ window.deleteSasaApplication = async function(type, id) {
         
         if (data.success) {
             alert("✅ 정상적으로 취소 및 삭제되었습니다.");
-            loadApplicationData(); // 삭제 성공 시 리스트 갱신
+            // 💡 삭제 성공 후 자동으로 목록 새로고침 (await 추가)
+            await loadApplicationData(); 
         } else {
             alert("❌ 삭제 실패: " + data.message);
         }
@@ -499,7 +504,8 @@ function setupApplicationButtons() {
                     if (data.success) {
                         alert("✅ 자율학습 신청이 완료되었습니다!");
                         modal.style.display = 'none';
-                        loadApplicationData(); // 내역 강제 새로고침
+                        // 💡 신청 성공 후 자동으로 목록 새로고침 (await 추가)
+                        await loadApplicationData(); 
                     } else {
                         alert("❌ 실패: " + data.message);
                     }
@@ -602,7 +608,8 @@ function setupApplicationButtons() {
                     if (data.success) {
                         alert("✅ 외출/외박 신청이 성공적으로 접수되었습니다!");
                         modal.style.display = 'none';
-                        loadApplicationData(); // 내역 강제 새로고침
+                        // 💡 신청 성공 후 자동으로 목록 새로고침 (await 추가)
+                        await loadApplicationData(); 
                     } else {
                         alert("❌ 반려됨: " + data.message);
                     }
