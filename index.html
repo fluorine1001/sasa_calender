@@ -441,6 +441,33 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="card" style="background:#fff; padding:20px; border-radius:12px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+                                <h3 style="margin:0; color:#2c3e50;">📋 나의 신청 내역</h3>
+                                <button id="btn-refresh-apps" class="cl-btn-secondary" style="font-size:12px; padding:4px 8px; border:1px solid #cbd5e1; background:#f8fafc; border-radius:4px; cursor:pointer; color:#475569;">새로고침</button>
+                            </div>
+                            
+                            <div style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden;">
+                                <div id="toggle-study-list" style="background:#f8fafc; padding:12px 15px; cursor:pointer; display:flex; justify-content:space-between; font-weight:bold; font-size:14px; color:#1e293b;">
+                                    <span>🌙 자율학습 신청 내역</span>
+                                    <span id="study-toggle-icon">▼</span>
+                                </div>
+                                <div id="study-list-container" style="display:none; padding:10px; background:#fff; max-height:250px; overflow-y:auto; border-top:1px solid #e2e8f0;">
+                                    <div style="text-align:center; color:#94a3b8; font-size:13px; padding:15px;">데이터를 불러오는 중...</div>
+                                </div>
+                            </div>
+                        
+                            <div style="border:1px solid #e2e8f0; border-radius:6px; overflow:hidden;">
+                                <div id="toggle-out-list" style="background:#f8fafc; padding:12px 15px; cursor:pointer; display:flex; justify-content:space-between; font-weight:bold; font-size:14px; color:#1e293b;">
+                                    <span>🚶 외출/외박 신청 내역</span>
+                                    <span id="out-toggle-icon">▼</span>
+                                </div>
+                                <div id="out-list-container" style="display:none; padding:10px; background:#fff; max-height:250px; overflow-y:auto; border-top:1px solid #e2e8f0;">
+                                    <div style="text-align:center; color:#94a3b8; font-size:13px; padding:15px;">데이터를 불러오는 중...</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
             
                     <div class="sasa-right-column">
