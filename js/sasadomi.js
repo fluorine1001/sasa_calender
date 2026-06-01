@@ -10,8 +10,8 @@ let savedSasaToken = null;
 // ==========================================
 // ⚠️ [필수 기입] 개발자님의 실제 백엔드 서버 환경에 맞게 수정하세요!
 // ==========================================
-const API_BASE_URL = 'https://당신의_백엔드_주소를_여기에_입력하세요.com'; 
-const API_KEY = '발급받은_x-api-key_문자열을_여기에_입력하세요'; 
+const API_BASE_URL = 'https://sasadomi-system.vercel.app'; 
+const API_KEY = 'sasa_dev_497a738259f6cd256b737c2a24073dca8b3681c9b2352b2d'; 
 
 function initSasadomi() {
     console.log("[Sasadomi] 모듈 통합 초기화 엔진 가동...");
