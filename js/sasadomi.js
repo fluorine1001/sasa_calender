@@ -8,7 +8,7 @@ let savedSasaId = null;
 let savedSasaToken = null;
 
 // ==========================================
-// ⚠️ [필수 기입] 개발자님의 실제 백엔드 서버 환경에 맞게 수정하세요!
+// ⚠️ 백엔드 서버 주소 및 API KEY 세팅
 // ==========================================
 const API_BASE_URL = 'https://sasadomi-system.vercel.app'; 
 const API_KEY = 'sasa_dev_497a738259f6cd256b737c2a24073dca8b3681c9b2352b2d'; 
@@ -20,7 +20,6 @@ function initSasadomi() {
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             currentUid = user.uid;
-            // 페이지 로드 시 파이어베이스에서 기존 연동 정보를 조회하여 UI 상태 세팅
             await checkSasaIntegrationStatus();
         } else {
             currentUid = null;
@@ -29,7 +28,6 @@ function initSasadomi() {
         }
     });
 
-    // 모달 제어 요소들
     const modal = document.getElementById('sasa-auth-modal');
     const closeBtn = document.getElementById('btn-close-sasa-modal');
     const cancelBtn = document.getElementById('btn-cancel-sasa-auth');
@@ -43,9 +41,6 @@ function initSasadomi() {
     if (closeBtn) closeBtn.addEventListener('click', closeModal);
     if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
 
-    // ==========================================
-    // 🔘 [이벤트 위임] 설정 탭 내 연동 / 해제 버튼 동적 제어
-    // ==========================================
     const actionGroup = document.getElementById('sasa-action-group');
     if (actionGroup) {
         actionGroup.addEventListener('click', async (e) => {
@@ -59,9 +54,6 @@ function initSasadomi() {
         });
     }
 
-    // ==========================================
-    // 🚀 [기능 1] 계정 로그인 및 정보 저장 (/v1/auth/login)
-    // ==========================================
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -70,25 +62,19 @@ function initSasadomi() {
             const sasaId = document.getElementById('sasa-input-id').value.trim();
             const sasaPw = document.getElementById('sasa-input-pw').value;
 
-            if (!/^s\d{10}$/.test(sasaId)) {
-                return alert("올바른 학번 형식(11자리, 예: s2026010701)을 제공해주세요.");
-            }
+            if (!/^s\d{10}$/.test(sasaId)) return alert("올바른 학번 형식(11자리, 예: s2026010701)을 제공해주세요.");
             if (!sasaPw) return alert("비밀번호를 입력해주세요.");
 
             try {
                 const response = await fetch(`${API_BASE_URL}/v1/auth/login`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': API_KEY
-                    },
+                    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
                     body: JSON.stringify({ studentId: sasaId, studentPw: sasaPw })
                 });
 
                 const data = await response.json();
 
                 if (data.success && data.sessionToken) {
-                    // Firestore 유저 문서에 연동 데이터 영구 보관
                     const userConfigRef = doc(db, "users", currentUid);
                     await setDoc(userConfigRef, {
                         isSasaLinked: true,
@@ -99,7 +85,7 @@ function initSasadomi() {
                     
                     alert("사사도미 계정이 성공적으로 연동되었습니다!");
                     closeModal();
-                    await checkSasaIntegrationStatus(); // 즉시 UI 새로고침
+                    await checkSasaIntegrationStatus(); 
                 } else {
                     alert(data.message || "연동 실패: 학번 또는 비밀번호를 다시 확인하세요.");
                 }
@@ -110,13 +96,10 @@ function initSasadomi() {
         });
     }
 
-    // 초기화 시점에 신청 버튼 이벤트 바인딩 추가
     setupApplicationButtons();
+    setupApplicationListToggles(); // 토글 이벤트 바인딩 추가
 }
 
-// ==========================================
-// 🔄 [기능 2] 실시간 연동 상태 체크 및 설정 UI 최적화 변경
-// ==========================================
 async function checkSasaIntegrationStatus() {
     if (!currentUid) return;
     
@@ -126,7 +109,6 @@ async function checkSasaIntegrationStatus() {
     const badge = document.getElementById('sasa-link-badge');
     const userMeta = document.getElementById('sasa-user-meta');
     const actionGroup = document.getElementById('sasa-action-group');
-    
     const unlinkedOverlay = document.getElementById('sasa-unlinked-overlay');
     const linkedContent = document.getElementById('sasa-linked-content');
 
@@ -135,72 +117,48 @@ async function checkSasaIntegrationStatus() {
         savedSasaId = userData.sasaStudentId;
         savedSasaToken = userData.sasaToken;
 
-        // 1. 설정 탭 UI 변경
         if (badge) {
             badge.innerText = "연동 완료";
             badge.className = "status-badge status-linked";
         }
-        if (userMeta) {
-            userMeta.innerHTML = `✅ 연동된 기숙사 계정: <span style="color:#1a73e8; font-weight:bold;">${savedSasaId}</span>`;
-        }
-        if (actionGroup) {
-            actionGroup.innerHTML = `<button id="btn-disconnect-sasa" class="cl-btn-secondary" style="background:#max-color; background-color:#ea4335; color:#fff; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:600;">연동 해제하기</button>`;
-        }
+        if (userMeta) userMeta.innerHTML = `✅ 연동된 기숙사 계정: <span style="color:#1a73e8; font-weight:bold;">${savedSasaId}</span>`;
+        if (actionGroup) actionGroup.innerHTML = `<button id="btn-disconnect-sasa" class="cl-btn-secondary" style="background-color:#ea4335; color:#fff; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:600;">연동 해제하기</button>`;
 
-        // 2. 사사도미 메인 탭 락(Lock) 해제 및 화면 전환
         if (unlinkedOverlay) unlinkedOverlay.style.display = 'none';
         if (linkedContent) linkedContent.style.display = 'grid';
-
     } else {
         savedSasaId = null;
         savedSasaToken = null;
 
-        // 1. 미연동 상태 설정 탭 UI 원복
         if (badge) {
             badge.innerText = "미연동";
             badge.className = "status-badge status-unlinked";
         }
-        if (userMeta) {
-            userMeta.innerText = "연동된 계정 정보가 없습니다.";
-        }
-        if (actionGroup) {
-            actionGroup.innerHTML = `<button id="btn-open-sasa-modal" class="cl-btn-primary">계정 연동하기</button>`;
-        }
+        if (userMeta) userMeta.innerText = "연동된 계정 정보가 없습니다.";
+        if (actionGroup) actionGroup.innerHTML = `<button id="btn-open-sasa-modal" class="cl-btn-primary">계정 연동하기</button>`;
 
-        // 2. 사사도미 메인 탭 보호 차단막 활성화
         if (unlinkedOverlay) unlinkedOverlay.style.display = 'block';
         if (linkedContent) linkedContent.style.display = 'none';
     }
 }
 
-// ==========================================
-// ❌ [기능 3] 계정 연동 해제 및 세션 데이터 파기 (/v1/auth/disconnect)
-// ==========================================
 async function handleSasaDisconnect() {
     if (!currentUid || !savedSasaId) return;
 
     try {
-        // 백엔드 게이트웨이에 파기 요청 전송
         await fetch(`${API_BASE_URL}/v1/auth/disconnect`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': API_KEY
-            },
+            headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
             body: JSON.stringify({ studentId: savedSasaId, token: savedSasaToken })
         });
     } catch (e) {
-        console.warn("백엔드 세션 파기 실패(데이터베이스는 강제 초기화 진행):", e);
+        console.warn("백엔드 세션 파기 실패:", e);
     }
 
-    // 결과에 상관없이 Firebase Store 상의 정보는 깔끔하게 지워 사용자 보호
     try {
         const userConfigRef = doc(db, "users", currentUid);
         await setDoc(userConfigRef, {
-            isSasaLinked: false,
-            sasaStudentId: null,
-            sasaToken: null,
-            sasaLinkedAt: null
+            isSasaLinked: false, sasaStudentId: null, sasaToken: null, sasaLinkedAt: null
         }, { merge: true });
 
         alert("사사도미 시스템 연동이 완전히 해제되었습니다.");
@@ -211,7 +169,7 @@ async function handleSasaDisconnect() {
 }
 
 // ==========================================
-// 📊 [기능 4] 사사도미 실시간 상벌점 로드 함수 (/v1/points)
+// 📊 [기능 4] 사사도미 실시간 상벌점 로드
 // ==========================================
 async function loadSasadomiData() {
     if (!savedSasaId || !savedSasaToken) return;
@@ -232,20 +190,15 @@ async function loadSasadomiData() {
         const data = await response.json();
 
         if (data.success) {
-            // 상점 총점 - 벌점 총점으로 누적 점수 디스플레이 빌드
             const netScore = data.totalReward - data.totalPenalty;
             if (scoreDisplay) {
                 scoreDisplay.innerText = netScore;
                 scoreDisplay.style.color = netScore >= 0 ? '#1a73e8' : '#d93025';
             }
-            if (statusText) {
-                statusText.innerHTML = `상점 <span style="color:#34a853; font-weight:bold;">${data.totalReward}점</span> / 벌점 <span style="color:#ea4335; font-weight:bold;">${data.totalPenalty}점</span>`;
-            }
+            if (statusText) statusText.innerHTML = `상점 <span style="color:#34a853; font-weight:bold;">${data.totalReward}점</span> / 벌점 <span style="color:#ea4335; font-weight:bold;">${data.totalPenalty}점</span>`;
 
-            // 상점 내역 리스트와 벌점 내역 리스트를 파싱하여 스크롤 리스트 렌더링
             let listHtml = '';
             
-            // 1. 상점 리스트 추가
             if (data.rewardList && data.rewardList.length > 0) {
                 data.rewardList.forEach(item => {
                     listHtml += `
@@ -260,7 +213,6 @@ async function loadSasadomiData() {
                 });
             }
 
-            // 2. 벌점 리스트 추가
             if (data.penaltyList && data.penaltyList.length > 0) {
                 data.penaltyList.forEach(item => {
                     listHtml += `
@@ -282,23 +234,133 @@ async function loadSasadomiData() {
             if (statusText) statusText.innerText = "데이터를 가져오지 못했습니다: " + data.message;
         }
     } catch (error) {
-        console.error("상벌점 조회 API 통신 오류:", error);
+        console.error("상벌점 조회 통신 오류:", error);
         if (statusText) statusText.innerText = "기숙사 서버 네트워크 연결 장애";
+    }
+}
+
+// ==========================================
+// 📋 [기능 5] 자율학습 / 외출 신청 내역 조회 및 토글
+// ==========================================
+function setupApplicationListToggles() {
+    const toggleStudy = document.getElementById('toggle-study-list');
+    const containerStudy = document.getElementById('study-list-container');
+    const iconStudy = document.getElementById('study-toggle-icon');
+
+    const toggleOut = document.getElementById('toggle-out-list');
+    const containerOut = document.getElementById('out-list-container');
+    const iconOut = document.getElementById('out-toggle-icon');
+
+    const btnRefreshApps = document.getElementById('btn-refresh-apps');
+
+    // 자율학습 토글 클릭 이벤트
+    if (toggleStudy) {
+        toggleStudy.addEventListener('click', () => {
+            const isHidden = containerStudy.style.display === 'none';
+            containerStudy.style.display = isHidden ? 'block' : 'none';
+            iconStudy.innerText = isHidden ? '▲' : '▼';
+        });
+    }
+
+    // 외출/외박 토글 클릭 이벤트
+    if (toggleOut) {
+        toggleOut.addEventListener('click', () => {
+            const isHidden = containerOut.style.display === 'none';
+            containerOut.style.display = isHidden ? 'block' : 'none';
+            iconOut.innerText = isHidden ? '▲' : '▼';
+        });
+    }
+
+    // 새로고침 버튼 이벤트
+    if (btnRefreshApps) {
+        btnRefreshApps.addEventListener('click', () => {
+            btnRefreshApps.innerText = "불러오는 중...";
+            btnRefreshApps.disabled = true;
+            loadApplicationData().finally(() => {
+                btnRefreshApps.innerText = "새로고침";
+                btnRefreshApps.disabled = false;
+            });
+        });
+    }
+}
+
+function getStatusBadgeHtml(status) {
+    if (status.includes('승인')) return `<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">${status}</span>`;
+    if (status.includes('거절') || status.includes('반려') || status.includes('삭제')) return `<span style="background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">${status}</span>`;
+    return `<span style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">${status}</span>`; // 대기
+}
+
+async function loadApplicationData() {
+    if (!savedSasaId || !savedSasaToken) return;
+
+    const studyContainer = document.getElementById('study-list-container');
+    const outContainer = document.getElementById('out-list-container');
+    
+    try {
+        const url = `${API_BASE_URL}/v1/applications?studentId=${savedSasaId}&token=${savedSasaToken}`;
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: { 'x-api-key': API_KEY }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            // 1. 자율학습 내역 렌더링
+            if (studyContainer) {
+                if (!data.studyList || data.studyList.length === 0) {
+                    studyContainer.innerHTML = '<div style="text-align:center; color:#94a3b8; font-size:13px; padding:15px;">신청 내역이 없습니다.</div>';
+                } else {
+                    studyContainer.innerHTML = data.studyList.map(item => `
+                        <div style="padding:10px 5px; border-bottom:1px solid #f1f5f9; font-size:13px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <span style="font-weight:600; color:#334155;">${item.date} [${item.time}]</span>
+                                ${getStatusBadgeHtml(item.status)}
+                            </div>
+                            <div style="color:#64748b; font-size:12px;">📍 ${item.place} ${item.teacher ? `(지도: ${item.teacher})` : ''}</div>
+                            ${item.detail ? `<div style="color:#94a3b8; font-size:11px; margin-top:3px;">📝 사유: ${item.detail}</div>` : ''}
+                            <div style="color:#cbd5e1; font-size:10px; margin-top:4px; text-align:right;">신청일시: ${item.applyDate}</div>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            // 2. 외출/외박 내역 렌더링
+            if (outContainer) {
+                if (!data.outList || data.outList.length === 0) {
+                    outContainer.innerHTML = '<div style="text-align:center; color:#94a3b8; font-size:13px; padding:15px;">신청 내역이 없습니다.</div>';
+                } else {
+                    outContainer.innerHTML = data.outList.map(item => `
+                        <div style="padding:10px 5px; border-bottom:1px solid #f1f5f9; font-size:13px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <span style="font-weight:600; color:#334155;">[${item.type}] ${item.reason}</span>
+                                ${getStatusBadgeHtml(item.status)}
+                            </div>
+                            <div style="color:#64748b; font-size:12px;">출발: <span style="color:#2563eb; font-weight:500;">${item.outDate}</span></div>
+                            <div style="color:#64748b; font-size:12px;">귀교: <span style="color:#e11d48; font-weight:500;">${item.inDate}</span></div>
+                            <div style="color:#cbd5e1; font-size:10px; margin-top:4px; text-align:right;">신청일시: ${item.applyDate}</div>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+    } catch (e) {
+        console.error("신청 내역 조회 실패:", e);
+        if (studyContainer) studyContainer.innerHTML = `<div style="color:#ef4444; font-size:12px; text-align:center; padding:10px;">데이터 로드 실패</div>`;
+        if (outContainer) outContainer.innerHTML = `<div style="color:#ef4444; font-size:12px; text-align:center; padding:10px;">데이터 로드 실패</div>`;
     }
 }
 
 
 // ==========================================
-// ⚙️ [공통] 메타데이터 로드 및 캐싱 함수, 모달 관련 유틸
+// ⚙️ [공통] 메타데이터 및 신청 대행 UI 유틸
 // ==========================================
 let sasaMetaCache = null;
 
 async function fetchSasaMetaOptions() {
-    if (sasaMetaCache) return sasaMetaCache; // 캐시된 데이터가 있으면 재사용
+    if (sasaMetaCache) return sasaMetaCache;
     try {
         const response = await fetch(`${API_BASE_URL}/v1/meta/options`, {
-            method: 'GET',
-            headers: { 'x-api-key': API_KEY }
+            method: 'GET', headers: { 'x-api-key': API_KEY }
         });
         const data = await response.json();
         if (data.success) {
@@ -308,20 +370,16 @@ async function fetchSasaMetaOptions() {
             throw new Error("메타데이터 로드 실패");
         }
     } catch (e) {
-        console.error(e);
-        alert("신청 옵션(시간/장소) 데이터를 불러오지 못했습니다.");
+        alert("신청 옵션 데이터를 불러오지 못했습니다.");
         return null;
     }
 }
 
-// 🕒 KST 기준 초 단위 Unix Timestamp 변환 도우미 함수
 function getUnixTimestampSeconds(dateStr, timeStr = "00:00") {
-    // KST(+09:00)로 강제 고정하여 타임스탬프 계산
     const dateObj = new Date(`${dateStr}T${timeStr}:00+09:00`);
     return Math.floor(dateObj.getTime() / 1000);
 }
 
-// 동적 모달 컨테이너 생성 (페이지에 한 번만 추가됨)
 function getOrCreateDynamicModal() {
     let modal = document.getElementById('sasa-dynamic-modal');
     if (!modal) {
@@ -333,27 +391,18 @@ function getOrCreateDynamicModal() {
     return modal;
 }
 
-
-// ==========================================
-// 🌙 [기능 5] 자율학습 신청 대행 & 외출 신청 작성 바인딩
-// ==========================================
 function setupApplicationButtons() {
     const btnToggleStudy = document.getElementById('btn-toggle-study');
     if (btnToggleStudy) {
         btnToggleStudy.addEventListener('click', async () => {
-            if (!savedSasaId || !savedSasaToken) {
-                return alert("🔒 사사도미 계정 연동이 필요합니다.");
-            }
+            if (!savedSasaId || !savedSasaToken) return alert("🔒 사사도미 계정 연동이 필요합니다.");
 
             btnToggleStudy.innerText = "⏳ 옵션 로딩 중...";
             const meta = await fetchSasaMetaOptions();
             btnToggleStudy.innerText = "자습 신청 대행";
             if (!meta) return;
 
-            // 오늘 날짜를 기본값으로 yyyy-mm-dd 포맷 생성
             const today = new Date().toLocaleDateString('en-CA'); 
-
-            // 폼 UI 동적 빌드 (제공된 이미지와 유사한 스타일로)
             const modal = getOrCreateDynamicModal();
             modal.innerHTML = `
                 <div class="cl-modal-box" style="width:400px; background:#fff; border-radius:12px; overflow:hidden;">
@@ -397,14 +446,12 @@ function setupApplicationButtons() {
             `;
             modal.style.display = 'flex';
 
-            // 장소가 '3'(본관)일 때만 교사 선택 활성화
             const placeSelect = document.getElementById('study-place');
             const teacherWrapper = document.getElementById('teacher-wrapper');
             placeSelect.addEventListener('change', (e) => {
                 teacherWrapper.style.display = e.target.value === '3' ? 'block' : 'none';
             });
 
-            // 폼 제출 이벤트
             document.getElementById('study-apply-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const dateVal = document.getElementById('study-date').value;
@@ -413,10 +460,9 @@ function setupApplicationButtons() {
                 const teacherVal = placeVal === '3' ? document.getElementById('study-teacher').value : '';
                 const reasonVal = document.getElementById('study-reason').value;
 
-                if (placeVal === '3' && !teacherVal) return alert("본관 신청 시 지도교사를 반드시 선택해야 합니다.");
+                if (placeVal === '3' && !teacherVal) return alert("본관 신청 시 지도교사를 선택해야 합니다.");
 
-                const unixDate = getUnixTimestampSeconds(dateVal); // 00시 00분 타임스탬프
-                
+                const unixDate = getUnixTimestampSeconds(dateVal); 
                 const submitBtn = e.target.querySelector('button[type="submit"]');
                 const originalBtnText = submitBtn.innerText;
                 submitBtn.disabled = true;
@@ -427,20 +473,15 @@ function setupApplicationButtons() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
                         body: JSON.stringify({
-                            studentId: savedSasaId,
-                            token: savedSasaToken,
-                            date: unixDate,
-                            time: timeVal,
-                            place: placeVal,
-                            detail: teacherVal,
-                            detail_reason: reasonVal
+                            studentId: savedSasaId, token: savedSasaToken,
+                            date: unixDate, time: timeVal, place: placeVal, detail: teacherVal, detail_reason: reasonVal
                         })
                     });
                     const data = await res.json();
                     if (data.success) {
                         alert("✅ 자율학습 신청이 완료되었습니다!");
                         modal.style.display = 'none';
-                        // 필요하다면 loadSasadomiData(); 호출
+                        loadApplicationData(); // 내역 강제 새로고침
                     } else {
                         alert("❌ 실패: " + data.message);
                     }
@@ -457,9 +498,7 @@ function setupApplicationButtons() {
     const btnApplyOuting = document.getElementById('btn-apply-outing');
     if (btnApplyOuting) {
         btnApplyOuting.addEventListener('click', async () => {
-            if (!savedSasaId || !savedSasaToken) {
-                return alert("🔒 사사도미 계정 연동이 필요합니다.");
-            }
+            if (!savedSasaId || !savedSasaToken) return alert("🔒 사사도미 계정 연동이 필요합니다.");
 
             btnApplyOuting.innerText = "⏳ 옵션 로딩 중...";
             const meta = await fetchSasaMetaOptions();
@@ -467,7 +506,6 @@ function setupApplicationButtons() {
             if (!meta) return;
 
             const today = new Date().toLocaleDateString('en-CA'); 
-
             const modal = getOrCreateDynamicModal();
             modal.innerHTML = `
                 <div class="cl-modal-box" style="width:420px; background:#fff; border-radius:12px; overflow:hidden;">
@@ -518,23 +556,15 @@ function setupApplicationButtons() {
             `;
             modal.style.display = 'flex';
 
-            // 폼 제출 이벤트
             document.getElementById('outing-apply-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const typeVal = document.getElementById('out-type').value;
                 const reasonVal = document.getElementById('out-reason').value;
                 
-                const startDate = document.getElementById('out-start-date').value;
-                const startTime = document.getElementById('out-start-time').value;
-                const bdateUnix = getUnixTimestampSeconds(startDate, startTime);
+                const bdateUnix = getUnixTimestampSeconds(document.getElementById('out-start-date').value, document.getElementById('out-start-time').value);
+                const edateUnix = getUnixTimestampSeconds(document.getElementById('out-end-date').value, document.getElementById('out-end-time').value);
 
-                const endDate = document.getElementById('out-end-date').value;
-                const endTime = document.getElementById('out-end-time').value;
-                const edateUnix = getUnixTimestampSeconds(endDate, endTime);
-
-                if (bdateUnix >= edateUnix) {
-                    return alert("귀교 시간이 출발 시간보다 빠르거나 같을 수 없습니다.");
-                }
+                if (bdateUnix >= edateUnix) return alert("귀교 시간이 출발 시간보다 빠르거나 같을 수 없습니다.");
                 
                 const submitBtn = e.target.querySelector('button[type="submit"]');
                 const originalBtnText = submitBtn.innerText;
@@ -546,18 +576,15 @@ function setupApplicationButtons() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
                         body: JSON.stringify({
-                            studentId: savedSasaId,
-                            token: savedSasaToken,
-                            type: typeVal,
-                            reason: reasonVal,
-                            bdate: bdateUnix,
-                            edate: edateUnix
+                            studentId: savedSasaId, token: savedSasaToken,
+                            type: typeVal, reason: reasonVal, bdate: bdateUnix, edate: edateUnix
                         })
                     });
                     const data = await res.json();
                     if (data.success) {
                         alert("✅ 외출/외박 신청이 성공적으로 접수되었습니다!");
                         modal.style.display = 'none';
+                        loadApplicationData(); // 내역 강제 새로고침
                     } else {
                         alert("❌ 반려됨: " + data.message);
                     }
@@ -572,7 +599,6 @@ function setupApplicationButtons() {
     }
 }
 
-
 // ==========================================
 // 🔗 [전역 바인딩] app.js 의 탭 체인저와 가교 연결
 // ==========================================
@@ -580,7 +606,8 @@ window.triggerSasaTabLoad = function() {
     console.log("[Hook] 사사도미 탭 진입 감지됨. 데이터 스크래핑 런타임 시작.");
     checkSasaIntegrationStatus().then(() => {
         if (savedSasaId && savedSasaToken) {
-            loadSasadomiData();
+            loadSasadomiData();      // 상벌점 데이터 로드
+            loadApplicationData();   // 신청 내역 데이터 로드 (신규)
         }
     });
 };
