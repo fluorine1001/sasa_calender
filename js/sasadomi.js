@@ -8,7 +8,7 @@ let savedSasaId = null;
 let savedSasaToken = null;
 
 // ==========================================
-// ⚠️ 백엔드 서버 주소 및 API KEY 세팅
+// ⚠️ [필수 기입] 개발자님의 실제 백엔드 서버 환경에 맞게 수정하세요!
 // ==========================================
 const API_BASE_URL = 'https://sasadomi-system.vercel.app'; 
 const API_KEY = 'sasa_dev_497a738259f6cd256b737c2a24073dca8b3681c9b2352b2d'; 
@@ -97,7 +97,7 @@ function initSasadomi() {
     }
 
     setupApplicationButtons();
-    setupApplicationListToggles(); // 토글 이벤트 바인딩 추가
+    setupApplicationListToggles(); 
 }
 
 async function checkSasaIntegrationStatus() {
@@ -168,9 +168,6 @@ async function handleSasaDisconnect() {
     }
 }
 
-// ==========================================
-// 📊 [기능 4] 사사도미 실시간 상벌점 로드
-// ==========================================
 async function loadSasadomiData() {
     if (!savedSasaId || !savedSasaToken) return;
 
@@ -182,11 +179,7 @@ async function loadSasadomiData() {
 
     try {
         const url = `${API_BASE_URL}/v1/points?studentId=${savedSasaId}&token=${savedSasaToken}`;
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: { 'x-api-key': API_KEY }
-        });
-
+        const response = await fetch(url, { method: 'GET', headers: { 'x-api-key': API_KEY } });
         const data = await response.json();
 
         if (data.success) {
@@ -198,7 +191,6 @@ async function loadSasadomiData() {
             if (statusText) statusText.innerHTML = `상점 <span style="color:#34a853; font-weight:bold;">${data.totalReward}점</span> / 벌점 <span style="color:#ea4335; font-weight:bold;">${data.totalPenalty}점</span>`;
 
             let listHtml = '';
-            
             if (data.rewardList && data.rewardList.length > 0) {
                 data.rewardList.forEach(item => {
                     listHtml += `
@@ -227,20 +219,17 @@ async function loadSasadomiData() {
                 });
             }
 
-            if (penaltyListContainer) {
-                penaltyListContainer.innerHTML = listHtml || '<p style="text-align:center; color:#94a3b8; padding:20px; font-size:13px;">깨끗합니다! 부여된 상벌점 내역이 없습니다.</p>';
-            }
+            if (penaltyListContainer) penaltyListContainer.innerHTML = listHtml || '<p style="text-align:center; color:#94a3b8; padding:20px; font-size:13px;">깨끗합니다! 부여된 상벌점 내역이 없습니다.</p>';
         } else {
             if (statusText) statusText.innerText = "데이터를 가져오지 못했습니다: " + data.message;
         }
     } catch (error) {
-        console.error("상벌점 조회 통신 오류:", error);
         if (statusText) statusText.innerText = "기숙사 서버 네트워크 연결 장애";
     }
 }
 
 // ==========================================
-// 📋 [기능 5] 자율학습 / 외출 신청 내역 조회 및 토글
+// 📋 [기능 5] 자율학습 / 외출 신청 내역 조회, 토글 및 삭제 기능
 // ==========================================
 function setupApplicationListToggles() {
     const toggleStudy = document.getElementById('toggle-study-list');
@@ -253,7 +242,6 @@ function setupApplicationListToggles() {
 
     const btnRefreshApps = document.getElementById('btn-refresh-apps');
 
-    // 자율학습 토글 클릭 이벤트
     if (toggleStudy) {
         toggleStudy.addEventListener('click', () => {
             const isHidden = containerStudy.style.display === 'none';
@@ -262,7 +250,6 @@ function setupApplicationListToggles() {
         });
     }
 
-    // 외출/외박 토글 클릭 이벤트
     if (toggleOut) {
         toggleOut.addEventListener('click', () => {
             const isHidden = containerOut.style.display === 'none';
@@ -271,7 +258,6 @@ function setupApplicationListToggles() {
         });
     }
 
-    // 새로고침 버튼 이벤트
     if (btnRefreshApps) {
         btnRefreshApps.addEventListener('click', () => {
             btnRefreshApps.innerText = "불러오는 중...";
@@ -298,14 +284,11 @@ async function loadApplicationData() {
     
     try {
         const url = `${API_BASE_URL}/v1/applications?studentId=${savedSasaId}&token=${savedSasaToken}`;
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: { 'x-api-key': API_KEY }
-        });
+        const response = await fetch(url, { method: 'GET', headers: { 'x-api-key': API_KEY } });
         const data = await response.json();
 
         if (data.success) {
-            // 1. 자율학습 내역 렌더링
+            // 1. 자율학습 내역 렌더링 (모두 삭제 가능)
             if (studyContainer) {
                 if (!data.studyList || data.studyList.length === 0) {
                     studyContainer.innerHTML = '<div style="text-align:center; color:#94a3b8; font-size:13px; padding:15px;">신청 내역이 없습니다.</div>';
@@ -318,18 +301,27 @@ async function loadApplicationData() {
                             </div>
                             <div style="color:#64748b; font-size:12px;">📍 ${item.place} ${item.teacher ? `(지도: ${item.teacher})` : ''}</div>
                             ${item.detail ? `<div style="color:#94a3b8; font-size:11px; margin-top:3px;">📝 사유: ${item.detail}</div>` : ''}
-                            <div style="color:#cbd5e1; font-size:10px; margin-top:4px; text-align:right;">신청일시: ${item.applyDate}</div>
+                            <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:6px;">
+                                <button onclick="window.deleteSasaApplication('study', '${item.id}')" style="background:#fee2e2; color:#991b1b; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">🗑️ 삭제/취소</button>
+                                <div style="color:#cbd5e1; font-size:10px; text-align:right;">신청일시: ${item.applyDate}</div>
+                            </div>
                         </div>
                     `).join('');
                 }
             }
 
-            // 2. 외출/외박 내역 렌더링
+            // 2. 외출/외박 내역 렌더링 (승인된 내역은 삭제 불가)
             if (outContainer) {
                 if (!data.outList || data.outList.length === 0) {
                     outContainer.innerHTML = '<div style="text-align:center; color:#94a3b8; font-size:13px; padding:15px;">신청 내역이 없습니다.</div>';
                 } else {
-                    outContainer.innerHTML = data.outList.map(item => `
+                    outContainer.innerHTML = data.outList.map(item => {
+                        const isApproved = item.status.includes('승인');
+                        const deleteBtnHtml = isApproved 
+                            ? `<span style="font-size:11px; color:#94a3b8; font-weight:600;">승인됨 (삭제불가)</span>`
+                            : `<button onclick="window.deleteSasaApplication('out', '${item.id}')" style="background:#fee2e2; color:#991b1b; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">🗑️ 삭제/취소</button>`;
+
+                        return `
                         <div style="padding:10px 5px; border-bottom:1px solid #f1f5f9; font-size:13px;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                                 <span style="font-weight:600; color:#334155;">[${item.type}] ${item.reason}</span>
@@ -337,19 +329,47 @@ async function loadApplicationData() {
                             </div>
                             <div style="color:#64748b; font-size:12px;">출발: <span style="color:#2563eb; font-weight:500;">${item.outDate}</span></div>
                             <div style="color:#64748b; font-size:12px;">귀교: <span style="color:#e11d48; font-weight:500;">${item.inDate}</span></div>
-                            <div style="color:#cbd5e1; font-size:10px; margin-top:4px; text-align:right;">신청일시: ${item.applyDate}</div>
+                            <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:6px;">
+                                ${deleteBtnHtml}
+                                <div style="color:#cbd5e1; font-size:10px; text-align:right;">신청일시: ${item.applyDate}</div>
+                            </div>
                         </div>
-                    `).join('');
+                        `;
+                    }).join('');
                 }
             }
         }
     } catch (e) {
-        console.error("신청 내역 조회 실패:", e);
         if (studyContainer) studyContainer.innerHTML = `<div style="color:#ef4444; font-size:12px; text-align:center; padding:10px;">데이터 로드 실패</div>`;
         if (outContainer) outContainer.innerHTML = `<div style="color:#ef4444; font-size:12px; text-align:center; padding:10px;">데이터 로드 실패</div>`;
     }
 }
 
+// 🗑️ 동적으로 렌더링된 삭제 버튼에서 호출할 전역 함수 바인딩
+window.deleteSasaApplication = async function(type, id) {
+    if (!savedSasaId || !savedSasaToken) return alert("인증 정보가 없습니다.");
+    if (!confirm("정말로 이 신청 내역을 삭제/취소하시겠습니까?")) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/v1/applications/${type}/${id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+            body: JSON.stringify({ studentId: savedSasaId, token: savedSasaToken })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert("✅ 정상적으로 취소 및 삭제되었습니다.");
+            loadApplicationData(); // 삭제 성공 시 리스트 갱신
+        } else {
+            alert("❌ 삭제 실패: " + data.message);
+        }
+    } catch (e) {
+        console.error("삭제 요청 에러:", e);
+        alert("서버 연결에 실패했습니다.");
+    }
+};
 
 // ==========================================
 // ⚙️ [공통] 메타데이터 및 신청 대행 UI 유틸
@@ -359,9 +379,7 @@ let sasaMetaCache = null;
 async function fetchSasaMetaOptions() {
     if (sasaMetaCache) return sasaMetaCache;
     try {
-        const response = await fetch(`${API_BASE_URL}/v1/meta/options`, {
-            method: 'GET', headers: { 'x-api-key': API_KEY }
-        });
+        const response = await fetch(`${API_BASE_URL}/v1/meta/options`, { method: 'GET', headers: { 'x-api-key': API_KEY } });
         const data = await response.json();
         if (data.success) {
             sasaMetaCache = data;
@@ -606,8 +624,8 @@ window.triggerSasaTabLoad = function() {
     console.log("[Hook] 사사도미 탭 진입 감지됨. 데이터 스크래핑 런타임 시작.");
     checkSasaIntegrationStatus().then(() => {
         if (savedSasaId && savedSasaToken) {
-            loadSasadomiData();      // 상벌점 데이터 로드
-            loadApplicationData();   // 신청 내역 데이터 로드 (신규)
+            loadSasadomiData();      
+            loadApplicationData();   
         }
     });
 };
