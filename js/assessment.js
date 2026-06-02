@@ -65,7 +65,6 @@ function initializeAssessmentModule() {
         console.log("🎨 [Assessment Debug] 커스텀 CSS 스타일 주입 완료");
     }
 
-    // 🔍 [핵심 디버깅] HTML 안에 ID들이 정상적으로 존재하는지 교차 검증 검사기
     console.log("🔍 [Assessment Debug] 현재 HTML 문서 내 주요 ID 연결 상태 점검...");
     const targetIDs = [
         'btn-user-settings', 'assessment-settings-modal', 'assessment-btn-close-x', 
@@ -81,7 +80,6 @@ function initializeAssessmentModule() {
         } else {
             console.error(`🚨 [ID 매칭 실패!!] "${id}" 요소가 현재 HTML에 존재하지 않습니다! 관련 기능이 100% 작동하지 않습니다.`);
             
-            // 혹시 접두사(assessment-)가 빠진 과거 ID가 남아있는지 보조 확인
             const alternativeId = id.replace('assessment-', '').replace('btn-save', 'btn-close-settings').replace('btn-reset', 'btn-reset-settings').replace('btn-close-x', 'btn-close-settings-x');
             if (document.getElementById(alternativeId)) {
                 console.warn(`💡 [힌트] "${id}" 대신 접두사가 없는 구형 ID "${alternativeId}"가 HTML에 남아있습니다. HTML 태그의 ID를 수정하셔야 합니다!`);
@@ -125,9 +123,6 @@ function initializeAssessmentModule() {
         renderList();
     });
 
-    // ==========================================
-    // ⚙️ 맞춤 설정 모달창 버튼 이벤트 바인딩 및 로그
-    // ==========================================
     const settingsModal = document.getElementById('assessment-settings-modal');
 
     // 1. 설정 창 열기 버튼
@@ -208,9 +203,7 @@ function initializeAssessmentModule() {
         });
     }
 
-    // ==========================================
     // ➕ "새 계획 추가" 클릭 이벤트 및 로그
-    // ==========================================
     const btnAdminAdd = document.getElementById('btn-admin-add');
     if (btnAdminAdd) {
         btnAdminAdd.addEventListener('click', () => {
@@ -230,7 +223,7 @@ function initializeAssessmentModule() {
                 gradeSelect.value = "1";
                 console.log("🎯 대상 학년 셀렉트 박스 기본값 '1학년' 강제 지정 성공");
             } else {
-                console.error("🚨 대상 학년 셀렉트 박스(ID: assessment-editor-grade-select)를 찾을 수 없습니다.");
+                console.error("🚨 대상 학년 셀렉트 박스를 찾을 수 없습니다.");
             }
             
             if (publicCheck) publicCheck.checked = true;
@@ -586,14 +579,17 @@ window.editAssessmentItem = function(docId) {
     switchToEditorView(); 
 };
 
-window.deleteAssessmentItem = async function(docId) {
-    if (!confirm("해당 교과 평가 계획을 영구히 삭제하시겠습니까?")) return;
-    try {
-        await deleteDoc(doc(db, 'assessments', docId));
-        console.log(`🗑️ Firestore 문서 삭제 완료: ${docId}`);
-    } catch (err) {
-        console.error("Firestore 삭제 실패:", err);
-    }
+window.deleteAssessmentItem = function(docId) {
+    // 💡 비동기 함수 내부에서 작동 유도를 위해 async 제거 후 즉시 실행 함수 처리 기법 유지
+    (async () => {
+        if (!confirm("해당 교과 평가 계획을 영구히 삭제하시겠습니까?")) return;
+        try {
+            await deleteDoc(doc(db, 'assessments', docId));
+            console.log(`🗑️ Firestore 문서 삭제 완료: ${docId}`);
+        } catch (err) {
+            console.error("Firestore 삭제 실패:", err);
+        }
+    })();
 };
 
 // ⚡ DOM 상태에 관계없이 안전하게 실행 보장 유도
