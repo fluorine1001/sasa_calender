@@ -581,8 +581,7 @@ function setupApplicationButtons() {
                                 </select>
                             </div>
                         </div>
-
-                        <button type="submit" class="cl-btn-primary" style="margin-top:5px; background:#e11d48; color:white; padding:12px; border-radius:6px; font-weight:bold; border:none; cursor:pointer;">신청</button>
+                        <button type="submit" class="cl-btn-primary" style="margin-top:5px; background:#3b82f6; color:white; padding:12px; border-radius:6px; font-weight:bold; border:none; cursor:pointer;">신청</button>
                     </form>
                 </div>
             `;
