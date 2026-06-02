@@ -67,3 +67,31 @@ document.addEventListener('DOMContentLoaded', () => {
         switchTab(targetTab);
     }, 100);
 });
+// 💡 [추가] 모바일 슬라이딩 사이드바 제어 로직
+const mobileToggleBtn = document.querySelector('.mobile-menu-toggle');
+const sidebar = document.querySelector('.sidebar');
+const overlay = document.querySelector('.sidebar-overlay');
+
+if (mobileToggleBtn && sidebar && overlay) {
+        // 열기/닫기 토글 함수
+    function toggleSidebar() {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('show');
+    }
+
+        // 1. 햄버거 버튼 클릭 시 토글
+    mobileToggleBtn.addEventListener('click', toggleSidebar);
+        
+        // 2. 어두운 배경(오버레이) 클릭 시 닫기
+    overlay.addEventListener('click', toggleSidebar);
+
+        // 3. 모바일에서 탭(메뉴)을 선택하면 사이드바가 자동으로 닫히게 처리
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+                // 화면 너비가 768px 이하이고, 사이드바가 열려있을 때만 닫기
+            if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
+                toggleSidebar();
+            }
+        });
+    });
+}
