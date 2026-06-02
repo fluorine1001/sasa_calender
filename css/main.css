@@ -154,7 +154,7 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
 }
 
 /* ========================================================
-   📱 [원인 해결] 사사도미 탭 및 전체 UI 세로 적층 완벽 보장 패치
+   🚀 [최종 완결판] 창 크기에 따른 유동적 UI 및 반응형 통합 엔진
 ======================================================== */
 
 /* 1. [전역 안전장치] 가로 스크롤 유발 및 화면 탈출 현상 원천 차단 */
@@ -167,29 +167,24 @@ html, body, .container, .content {
     overflow-x: hidden !important;
 }
 
-/* 2. [기본 노출 조건] PC 등 화면이 넓어 사이드바가 떠 있을 때는 햄버거 버튼을 완벽 은닉 */
+/* 2. [기본 노출 조건] PC 등 화면이 넓을 때는 햄버거 버튼 완벽 은닉 */
 .mobile-menu-toggle {
     display: none !important;
 }
 
-/* ========================================================
-   🚨 [최종 패치] 사사도미 우측 UI(벌점 사유 등) 강제 하단 적층 
-======================================================== */
+/* 3. [핵심 적층 로직] 1150px 이하에서 UI 세로 적층 (JS 숨김 충돌 해결) */
 @media (max-width: 1150px) {
-    /* 1. 사사도미 탭 및 본문 내부의 구조를 무조건 세로 방향(Column)으로 강제 변환 */
-    #sasadomi, 
-    #sasadomi > div,
-    .tab-content.active,
-    .tab-content.active > div, 
-    .content > div {
+    /* JS에서 display: none; 처리한 로딩/오류 창은 강제 표시(flex) 대상에서 제외 (:not) */
+    #sasadomi > div:not([style*="none"]),
+    .tab-content.active > div:not([style*="none"]), 
+    .content > div:not([style*="none"]) {
         display: flex !important;
         flex-direction: column !important;
         width: 100% !important;
         gap: 20px !important;
     }
 
-    /* 2. ⭐️ 핵심: '카드(.card)' 요소들이 가로 공간을 100% 독차지하도록 팽창시킵니다.
-       옆에 남는 공간이 1px도 없게 되므로, 우측 카드는 무조건 다음 줄(하단)로 쫓겨납니다. */
+    /* 우측 요소(벌점 규정 등)가 옆에 붙지 못하도록 카드의 가로폭을 100%로 팽창시켜 하단으로 밀어냄 */
     #sasadomi .card, 
     .tab-content .card, 
     .content .card {
@@ -197,17 +192,17 @@ html, body, .container, .content {
         max-width: 100% !important;
         min-width: 100% !important;
         flex: 0 0 100% !important;
-        margin: 0 0 20px 0 !important; /* 좌우 여백 없앰, 아래 여백만 20px */
+        margin: 0 0 20px 0 !important; 
         box-sizing: border-box !important;
     }
 
-    /* 3. 테이블(표)이 너무 커서 카드를 뚫고 나가는 현상 원천 차단 */
+    /* 테이블이 카드를 뚫고 나가는 현상 차단 */
     .card table, .card thead, .card tbody {
         width: 100% !important;
         max-width: 100% !important;
     }
 
-    /* 표 안의 내용이 길면, 화면 전체가 망가지지 않고 카드 안에서만 스크롤되도록 보호 */
+    /* 표 내용이 길면 화면 전체가 아닌 카드 내부에서만 스크롤되도록 제어 */
     .card > div, 
     .card table {
         overflow-x: auto !important;
@@ -215,7 +210,7 @@ html, body, .container, .content {
     }
 }
 
-/* 4. [동적 크기 조정] 창 크기에 연동되는 폰트 시스템 (Fluid Typography) */
+/* 4. [동적 폰트 스케일링] 화면이 좁아질 때 글자가 잘리지 않도록 자동 축소 (Fluid Typography) */
 h1, h2, h3, .card h2, .content h2 {
     font-size: clamp(16px, 4vw, 24px) !important;
     white-space: nowrap !important;
@@ -236,7 +231,7 @@ button, .btn, form button {
     word-break: keep-all !important;
 }
 
-/* 5. [디자인 통일] 사사도미 인증 및 모달 팝업창 하단 버튼 디자인 색상 정돈 */
+/* 5. [디자인 통일] 모달 팝업 및 폼 하단 버튼 색상(파란색) 통일 */
 form div[style*="display"] > button,
 .modal-content div[style*="display"] > button {
     background-color: #3498db !important; 
@@ -253,28 +248,28 @@ form div[style*="display"] > button:hover,
     background-color: #2980b9 !important;
 }
 
-/* 6. [모바일 전용 구간] 사이드바가 화면을 가려 방해가 되는 시점 (768px 이하) */
+/* 6. [모바일 구간] 768px 이하에서 햄버거 버튼 우측 하단 노출 및 사이드바 제어 */
 @media (max-width: 768px) {
     .content {
         padding: 20px !important;
     }
 
-    /* 🍔 요구사항 반영: 평소엔 숨겨져 있다가, 사이드바가 숨겨지는 768px 이하 환경에서만 우측 하단에 활성화 */
+    /* 햄버거 버튼을 우측 하단 플로팅 버튼으로 활성화 */
     .mobile-menu-toggle {
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         position: fixed !important;
-        bottom: 20px !important; /* 우측 하단 여백 정의 */
+        bottom: 20px !important; 
         right: 20px !important;
-        left: auto !important;   /* 기존 상단/좌측 레이아웃 초기화 */
+        left: auto !important;   
         top: auto !important;
         width: 50px !important;
         height: 50px !important;
         background: #2c3e50 !important;
         color: #ffffff !important;
         border: none !important;
-        border-radius: 50% !important; /* 한 손 제어가 직관적인 원형 플로팅 디자인 */
+        border-radius: 50% !important; 
         cursor: pointer !important;
         z-index: 1001 !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
@@ -286,7 +281,7 @@ form div[style*="display"] > button:hover,
         transform: scale(0.9) !important;
     }
 
-    /* 사이드바 숨김 배치 처리 */
+    /* 모바일에서 사이드바는 기본적으로 화면 좌측 밖으로 숨김 */
     .sidebar {
         position: fixed !important;
         top: 0 !important;
@@ -297,10 +292,12 @@ form div[style*="display"] > button:hover,
         transition: left 0.3s ease-in-out !important;
     }
 
+    /* app.js의 로직에 의해 .open 클래스가 붙으면 슬라이딩되어 나옴 */
     .sidebar.open {
         left: 0 !important;
     }
 
+    /* 어두운 배경 오버레이 */
     .sidebar-overlay {
         position: fixed !important;
         top: 0 !important;
