@@ -26,7 +26,7 @@ const defaultLatexGuide = [
     { category: "1. 구별 기호 및 그리스 문자", inputs: [{ syntax: "\\dot{a}, \\ddot{a}", desc: "문자 위 점 기호", example: "$\\dot{a}, \\ddot{a}$" }] }
 ];
 
-// 🎓 [신규] 학년 다중 선택/조회를 위한 유연한 헬퍼 함수
+// 🎓 학년 다중 선택/조회를 위한 유연한 헬퍼 함수
 function getSelectedGrades() {
     // 1. 체크박스 그룹 형태 지원
     const checkboxes = document.querySelectorAll('.assessment-grade-checkbox');
@@ -65,6 +65,21 @@ function setSelectedGrades(grades) {
         } else if (grades.length > 0) {
             gradeSelect.value = grades[0];
         }
+    }
+}
+
+// ☁️ [신규] 개인 맞춤 설정을 클라우드에 안전하게 동기화하는 함수
+async function savePreferencesToCloud() {
+    if (!currentUid) return;
+    try {
+        const prefDocRef = doc(db, 'users', currentUid, 'preferences', 'assessments');
+        await setDoc(prefDocRef, {
+            gradeSettings: gradeSettings,
+            userSettings: userSettings,
+            updatedAt: serverTimestamp()
+        });
+    } catch (e) {
+        console.error("🚨 클라우드 설정 동기화 실패:", e);
     }
 }
 
@@ -133,21 +148,49 @@ function initializeAssessmentModule() {
         listView.parentNode.appendChild(editorView);
     }
 
-    loadConfigFromStorage();
-
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
         console.log("🔐 [Assessment Debug] 인증 상태 감지됨:", user ? `UID: ${user.uid}` : "로그아웃 상태");
         if (user) {
             currentUid = user.uid;
+            
+            // 1. 관리자 여부 확인
             try {
                 const userDoc = await getDoc(doc(db, `users/${currentUid}`));
-                isCurrentUserAdmin = (userDoc.exists() && userDoc.data().isAdmin === true);
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    isCurrentUserAdmin = (userData.isAdmin === true || userData.role === 'admin');
+                }
+                console.log(`🛡️ [Assessment Debug] 관리자 여부 검증 결과: ${isCurrentUserAdmin}`);
             } catch (e) { 
                 console.error("🚨 관리자 정보 획득 실패:", e);
                 isCurrentUserAdmin = false; 
             }
+
+            // 🔥 2. Firestore에서 개인 맞춤 설정 불러오기
+            try {
+                const prefDocRef = doc(db, 'users', currentUid, 'preferences', 'assessments');
+                const prefDocSnap = await getDoc(prefDocRef);
+                
+                if (prefDocSnap.exists()) {
+                    const prefData = prefDocSnap.data();
+                    if (prefData.gradeSettings) gradeSettings = prefData.gradeSettings;
+                    if (prefData.userSettings) userSettings = prefData.userSettings;
+                    console.log("🎯 Firestore에서 개인 맞춤 설정을 성공적으로 불러왔습니다.");
+                } else {
+                    console.log("ℹ️ 기존 맞춤 설정이 없어 기본값으로 시작합니다.");
+                    gradeSettings = {
+                        '1': { visible: true, sort: 'priority', expanded: true },
+                        '2': { visible: true, sort: 'priority', expanded: true },
+                        '3': { visible: true, sort: 'priority', expanded: true }
+                    };
+                    userSettings = [];
+                }
+            } catch (err) {
+                console.error("🚨 개인 맞춤 설정 로드 중 오류 발생:", err);
+            }
             
+            // 3. UI 및 실시간 동기화 트리거
             if (isCurrentUserAdmin) {
                 document.querySelectorAll('#btn-admin-add, .admin-only').forEach(el => el.style.setProperty('display', 'inline-block', 'important'));
                 initRichEditorInstance(); 
@@ -186,42 +229,70 @@ function initializeAssessmentModule() {
         });
     }
 
-    // 3. 설정 저장 및 닫기 버튼
+    // 3. 설정 저장 및 닫기 버튼 (Firestore 원격 저장 로직 적용)
     const btnSave = document.getElementById('assessment-btn-save') || document.getElementById('btn-close-settings');
     if (btnSave) {
-        btnSave.addEventListener('click', () => {
-            document.querySelectorAll('.setting-grade-visible').forEach(chk => {
-                const gradeKey = chk.dataset.grade;
-                if (gradeSettings[gradeKey]) gradeSettings[gradeKey].visible = chk.checked;
-            });
+        btnSave.addEventListener('click', async () => {
+            if (!currentUid) {
+                alert("로그인 세션이 만료되었습니다. 다시 로그인해주세요.");
+                return;
+            }
 
-            document.querySelectorAll('.settings-item').forEach(item => {
-                const targetChk = item.querySelector('.setting-visible');
-                const targetInput = item.querySelector('.setting-priority');
-                if (!targetChk || !targetInput) return;
+            btnSave.disabled = true;
+            btnSave.innerText = "저장 중...";
+
+            try {
+                // 1. 학년별 상위 탭 표시 여부 수집
+                document.querySelectorAll('.setting-grade-visible').forEach(chk => {
+                    const gradeKey = chk.dataset.grade;
+                    if (!gradeSettings[gradeKey]) gradeSettings[gradeKey] = { sort: 'priority', expanded: true };
+                    gradeSettings[gradeKey].visible = chk.checked;
+                });
+
+                // 2. 개별 과목 숨김 및 순위 수집
+                const newUserSettings = [];
+                document.querySelectorAll('.setting-visible').forEach(chk => {
+                    const docId = chk.getAttribute('data-id');
+                    newUserSettings.push({
+                        id: docId,
+                        visible: chk.checked,
+                        priority: 1
+                    });
+                });
+
+                document.querySelectorAll('.setting-priority').forEach(input => {
+                    const docId = input.getAttribute('data-id');
+                    const targetItem = newUserSettings.find(item => item.id === docId);
+                    if (targetItem) {
+                        targetItem.priority = parseInt(input.value, 10) || 1;
+                    }
+                });
+
+                userSettings = newUserSettings;
+
+                // 3. Firestore 동기화
+                await savePreferencesToCloud();
+
+                renderList();
+                if (settingsModal) settingsModal.style.display = 'none';
+                alert("✅ 맞춤 설정이 성공적으로 클라우드에 저장되었습니다.");
                 
-                const docId = targetChk.dataset.id;
-                let targetObject = userSettings.find(s => s.id === docId);
-                if (!targetObject) {
-                    targetObject = { id: docId };
-                    userSettings.push(targetObject);
-                }
-                targetObject.visible = targetChk.checked;
-                targetObject.priority = parseInt(targetInput.value) || 1;
-            });
-
-            flushConfigToStorage();
-            renderList();
-            if (settingsModal) settingsModal.style.display = 'none';
-            alert("✅ 맞춤 설정이 성공적으로 저장되었습니다.");
+            } catch (error) {
+                console.error("🚨 맞춤 설정 원격 저장 실패:", error);
+                alert("설정을 저장하는 도중 오류가 발생했습니다. 다시 시도해 주세요.");
+            } finally {
+                btnSave.disabled = false;
+                btnSave.innerText = "설정 저장 및 닫기";
+            }
         });
     }
 
-    // 4. 기본값 초기화 버튼
+    // 4. 기본값 초기화 버튼 (Firestore 원격 초기화)
     const btnReset = document.getElementById('assessment-btn-reset') || document.getElementById('btn-reset-settings');
     if (btnReset) {
-        btnReset.addEventListener('click', () => {
+        btnReset.addEventListener('click', async () => {
             if (!confirm("모든 설정을 초기화하고 기본 상태로 되돌리시겠습니까?")) return;
+            
             gradeSettings = {
                 '1': { visible: true, sort: 'priority', expanded: true },
                 '2': { visible: true, sort: 'priority', expanded: true },
@@ -229,10 +300,11 @@ function initializeAssessmentModule() {
             };
             userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
             
-            flushConfigToStorage();
+            await savePreferencesToCloud();
+            
             renderSettingsModalTree(); 
             renderList();
-            alert("🔄 설정이 초기화되었습니다. '설정 저장 및 닫기'를 누르면 최종 반영됩니다.");
+            alert("🔄 설정이 초기화되어 클라우드에 반영되었습니다.");
         });
     }
 
@@ -245,7 +317,6 @@ function initializeAssessmentModule() {
                 editorInstance.reset();
             }
             
-            // 다중 선택 헬퍼를 사용해 기본값 1학년으로 리셋
             setSelectedGrades(['1']);
             
             const publicCheck = document.getElementById('assessment-editor-public-check') || document.getElementById('editor-public-check');
@@ -293,24 +364,19 @@ function initRichEditorInstance() {
                     const batch = writeBatch(db);
 
                     if (editingId) {
-                        // [수정 모드] 고유 데이터 참조 ID 획득
                         const currentMeta = subjects.find(sub => sub.id === editingId);
                         const sharedContentId = currentMeta.contentId;
 
-                        // 1. 공통 알맹이(본문 및 첨부파일) 데이터 업데이트
                         batch.update(doc(db, 'assessment_contents', sharedContentId), {
                             content: data.bodyHtml,
                             files: data.files || []
                         });
 
-                        // 2. 다중 학년 변경 지원 (ex: 1학년만 있던 항목을 1,2학년으로 수정)
-                        // 기존에 이 본문을 공유(링크)하고 있던 메타데이터를 모두 파괴하고 새로 분할 생성합니다.
                         const relatedMetas = subjects.filter(sub => sub.contentId === sharedContentId);
                         relatedMetas.forEach(meta => {
                             batch.delete(doc(db, 'assessments', meta.id));
                         });
 
-                        // 3. 수정 화면에서 체크된 다중 학년 배열을 기반으로 참조형 메타데이터 일괄 재생성
                         selectedGrades.forEach(grade => {
                             const metaDocRef = doc(collection(db, 'assessments'));
                             batch.set(metaDocRef, {
@@ -319,7 +385,7 @@ function initRichEditorInstance() {
                                 title: data.title,
                                 contentId: sharedContentId,
                                 isPublic: isPublicChecked,
-                                createdAt: currentMeta.createdAt || serverTimestamp(), // 기존 작성시간 보존
+                                createdAt: currentMeta.createdAt || serverTimestamp(),
                                 updatedAt: serverTimestamp()
                             });
                         });
@@ -328,24 +394,21 @@ function initRichEditorInstance() {
                         console.log(`📝 문서 및 연동 본문 일괄 수정/분할 완료 (공유 ID: ${sharedContentId})`);
                         alert(`✅ 성공적으로 수정되어 ${selectedGrades.join(', ')}학년 계획에 반영되었습니다.`);
                     } else {
-                        // [신규 등록 모드] 공통 무거운 데이터 본문 ID 선발급 후 링크 연결식 분할 저장
                         const contentDocRef = doc(collection(db, 'assessment_contents'));
                         const sharedContentId = contentDocRef.id;
 
-                        // 1. 본문 데이터 전용 컬렉션에 무거운 알맹이 1회만 격리 저장
                         batch.set(contentDocRef, {
                             content: data.bodyHtml,
                             files: data.files || []
                         });
 
-                        // 2. 다중 학년 배열을 순회하며 가벼운 참조 메타데이터 분할 저장
                         selectedGrades.forEach(grade => {
                             const metaDocRef = doc(collection(db, 'assessments'));
                             batch.set(metaDocRef, {
                                 id: metaDocRef.id,
                                 grade: grade,
                                 title: data.title,
-                                contentId: sharedContentId, // 고유 데이터 아이디 연결 고리 (중요)
+                                contentId: sharedContentId,
                                 isPublic: isPublicChecked,
                                 createdAt: serverTimestamp(),
                                 updatedAt: serverTimestamp()
@@ -422,7 +485,7 @@ function switchToEditorView() {
     if (editorView) editorView.style.display = 'block';
 }
 
-// 📡 실시간 메타 동기화 (가벼운 참조 정보만 구독하여 트래픽 대폭 최소화)
+// 📡 실시간 메타 동기화
 function startSnapshotSync() {
     if (unsubscribeAssessments) unsubscribeAssessments();
     
@@ -435,7 +498,6 @@ function startSnapshotSync() {
             const preLoadedItem = oldSubjects.find(s => s.id === doc.id);
             
             if (preLoadedItem && preLoadedItem.isContentLoaded) {
-                // 이미 화면상에서 가져와 로딩된 내역이 존재한다면 캐싱 데이터 보존 연동
                 subjects.push({
                     id: doc.id,
                     ...data,
@@ -444,7 +506,6 @@ function startSnapshotSync() {
                     files: preLoadedItem.files
                 });
             } else {
-                // 최초 데이터 진입 시에는 무거운 본문을 빈 공간으로 마킹
                 subjects.push({ 
                     id: doc.id, 
                     ...data,
@@ -466,18 +527,6 @@ function startSnapshotSync() {
     });
 }
 
-function loadConfigFromStorage() {
-    const rawG = localStorage.getItem('sasa_assessment_grade_settings');
-    if (rawG) { try { gradeSettings = { ...gradeSettings, ...JSON.parse(rawG) }; } catch (e) {} }
-    const rawU = localStorage.getItem('sasa_assessment_user_settings');
-    if (rawU) { try { userSettings = JSON.parse(rawU); } catch (e) {} }
-}
-
-function flushConfigToStorage() {
-    localStorage.setItem('sasa_assessment_grade_settings', JSON.stringify(gradeSettings));
-    localStorage.setItem('sasa_assessment_user_settings', JSON.stringify(userSettings));
-}
-
 function renderList() {
     const mainViewTarget = document.getElementById('evaluation-list');
     if (!mainViewTarget) return;
@@ -496,14 +545,16 @@ function renderList() {
             );
         }
 
+        // 전역 공개 설정 반영
         if (!isCurrentUserAdmin) {
             matchedItems = matchedItems.filter(sub => sub.isPublic !== false);
         }
 
-        const isGradeTabPublic = currentGradeConf.visible;
+        // 개인 화면 표시 설정 반영
+        const isGradeTabVisible = currentGradeConf.visible;
         let visibleItems = [];
         
-        if (isGradeTabPublic) {
+        if (isGradeTabVisible) {
             visibleItems = matchedItems.filter(sub => {
                 const preference = userSettings.find(s => s.id === sub.id) || { visible: true };
                 return preference.visible;
@@ -531,7 +582,9 @@ function renderList() {
         const isOpen = currentGradeConf.expanded !== false;
         const bodyToggleCss = isOpen ? 'block' : 'none';
         const caret = isOpen ? '▼' : '▶';
-        const displayBadge = isGradeTabPublic ? '<span class="badge badge-public">공개 중</span>' : '<span class="badge badge-private">비공개(숨김)</span>';
+        
+        // 텍스트 직관화 (숨김 여부)
+        const displayBadge = isGradeTabVisible ? '' : '<span class="badge" style="background: #edf2f7; color: #4a5568; margin-left: 6px;">내 화면에서 숨김됨</span>';
 
         combinedHtml += `
             <div class="grade-accordion-section" data-grade="${gradeKey}">
@@ -554,7 +607,7 @@ function renderList() {
                 <div class="grade-accordion-body grade-body-${gradeKey}" style="display: ${bodyToggleCss};">
                     ${visibleItems.length === 0 ? `
                         <div style="text-align: center; padding: 24px; color: #a0aec0; font-size: 13px;">
-                            ${isGradeTabPublic ? '등록된 데이터가 없거나 맞춤설정에서 모두 해제되었습니다.' : '⚠️ 현재 학년 전체 탭이 숨김(비공개) 처리 상태입니다.'}
+                            ${isGradeTabVisible ? '등록된 데이터가 없거나 맞춤설정에서 모두 체크 해제되었습니다.' : '👁️ 맞춤 설정에서 이 학년 탭을 숨기도록 설정하셨습니다.'}
                         </div>
                     ` : visibleItems.map(sub => {
                         const internalSecretTag = sub.isPublic === false ? '<span class="badge badge-private" style="margin-left:5px;">원격비공개</span>' : '';
@@ -605,10 +658,10 @@ function renderSettingsModalTree() {
         treeHtml += `
             <div class="settings-grade-block">
                 <div class="settings-grade-header">
-                    <span>📍 ${gradeKey}학년 마스터 제어 탭</span>
+                    <span>👁️ ${gradeKey}학년 탭 표시 설정</span>
                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px;">
                         <input type="checkbox" class="setting-grade-visible" data-grade="${gradeKey}" ${currentGradeMeta.visible ? 'checked' : ''} onchange="window.onTreeMasterNodeToggle('${gradeKey}', this.checked)" style="width:15px; height:15px;">
-                        상위 탭 활성화
+                        내 화면에 표시
                     </label>
                 </div>
                 <div class="settings-grade-items-box-${gradeKey}" style="opacity: ${currentGradeMeta.visible ? '1' : '0.45'}; transition: opacity 0.25s ease;">
@@ -642,7 +695,7 @@ function renderSettingsModalTree() {
 window.toggleGradeAccordion = function(gradeKey) {
     if (gradeSettings[gradeKey]) {
         gradeSettings[gradeKey].expanded = !gradeSettings[gradeKey].expanded;
-        flushConfigToStorage();
+        savePreferencesToCloud(); // 클라우드 동기화 (비동기)
         renderList();
     }
 };
@@ -650,7 +703,7 @@ window.toggleGradeAccordion = function(gradeKey) {
 window.changeGradeSort = function(gradeKey, sortValue) {
     if (gradeSettings[gradeKey]) {
         gradeSettings[gradeKey].sort = sortValue;
-        flushConfigToStorage();
+        savePreferencesToCloud(); // 클라우드 동기화 (비동기)
         renderList();
     }
 };
@@ -674,21 +727,19 @@ window.toggleItemAccordion = async function(docId) {
     const isCurrentActive = bodyTarget.classList.toggle('active');
     if (arrowTarget) arrowTarget.innerText = isCurrentActive ? '▼' : '▶';
 
-    // 토글을 열었을 때이며 + 아직 해당 원본 데이터를 서버에서 땡겨온 적이 없는 최초 1회만 처리
     if (isCurrentActive) {
         const metaObj = subjects.find(sub => sub.id === docId);
         if (metaObj && !metaObj.isContentLoaded) {
             bodyTarget.innerHTML = `<div style="text-align: center; padding: 10px; color: #a0aec0; font-size:13px;">⏳ 내용을 안전하게 불러오는 중...</div>`;
             
             try {
-                // 가벼운 링크 문서에 각인되어 있는 고유 contentId 기반 알맹이 콕 집어 단독 조회
                 const contentDoc = await getDoc(doc(db, 'assessment_contents', metaObj.contentId));
                 
                 if (contentDoc.exists()) {
                     const cData = contentDoc.data();
                     metaObj.content = cData.content || '';
                     metaObj.files = cData.files || [];
-                    metaObj.isContentLoaded = true; // 로드 완료 마킹하여 연속 호출 제거
+                    metaObj.isContentLoaded = true; 
 
                     let filesHtml = '';
                     if (metaObj.files && metaObj.files.length > 0) {
@@ -718,7 +769,6 @@ window.editAssessmentItem = async function(docId) {
     let targetContent = object.content;
     let targetFiles = object.files;
 
-    // 만약 한 번도 아코디언을 열어보지 않고 곧바로 수정을 눌렀다면, 데이터 참조 ID 기반 본문 즉시 소싱
     if (!object.isContentLoaded) {
         try {
             const contentDoc = await getDoc(doc(db, 'assessment_contents', object.contentId));
@@ -731,7 +781,6 @@ window.editAssessmentItem = async function(docId) {
         }
     }
     
-    // [다중 선택 호환 패치] 동일한 contentId를 링크하고 있는 학년들을 모두 모아 에디터에 다중 체크/선택 상태로 복원
     const relatedMetas = subjects.filter(sub => sub.contentId === object.contentId);
     const selectedGrades = relatedMetas.map(meta => meta.grade);
     setSelectedGrades(selectedGrades);
@@ -746,7 +795,7 @@ window.editAssessmentItem = async function(docId) {
     switchToEditorView(); 
 };
 
-// 🗑️ 연동 일괄 제거 원칙 반영: 동일 고유 참조를 사용하는 항목 링크 및 본문 일괄 통합 원자적 파괴
+// 🗑️ 연동 일괄 제거 원칙 반영
 window.deleteAssessmentItem = async function(docId) {
     const object = subjects.find(sub => sub.id === docId);
     if (!object) return;
@@ -756,12 +805,10 @@ window.deleteAssessmentItem = async function(docId) {
         const batch = writeBatch(db);
         const sharedContentId = object.contentId;
 
-        // 1. 공통 무거운 본문 데이터 컬렉션 원본 제거
         if (sharedContentId) {
             batch.delete(doc(db, 'assessment_contents', sharedContentId));
         }
 
-        // 2. 이 데이터 아이디(contentId) 링크를 공유하던 모든 학년별 참조 메타데이터 동시 일괄 파괴
         const relatedMetas = subjects.filter(sub => sub.contentId === sharedContentId);
         relatedMetas.forEach(meta => {
             batch.delete(doc(db, 'assessments', meta.id));
