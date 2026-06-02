@@ -1,12 +1,15 @@
 // js/rich-editor.js
 export class NoticeEditor {
+    // 다중 에디터 간에 우클릭 컨텍스트 메뉴를 공유하기 위한 전역 활성 인스턴스 저장소
+    static activeInstance = null;
+
     constructor(containerId, latexGuide, callbacks) {
         this.container = document.getElementById(containerId);
         this.latexGuide = latexGuide;
         this.callbacks = callbacks;
         this.quill = null;
         
-        // 💡 Cloudinary 설정 (이미지/비디오 공용 업로드를 위해 auto 사용)
+        // 💡 Cloudinary 설정
         this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/djryl7blo/auto/upload"; 
         this.uploadPreset = "SASAcalender"; 
 
@@ -26,7 +29,7 @@ export class NoticeEditor {
         this.initEvents();
     }
 
-    // 📌 전역 UI (통합 모달창, 우클릭 메뉴)
+    // 📌 전역 UI (통합 모달창, 우클릭 메뉴 - 단 한 번만 생성되도록 보장)
     renderGlobalUI() {
         if (document.getElementById('quill-custom-media-ui')) return;
 
@@ -84,34 +87,43 @@ export class NoticeEditor {
         const menuBtn = document.getElementById('menu-item-edit-media');
         menuBtn.onmouseover = () => menuBtn.style.background = '#f1f3f4';
         menuBtn.onmouseout = () => menuBtn.style.background = '#fff';
+
+        // 공유 메뉴 클릭 시 현재 활성화된 에디터 인스턴스의 핸들러를 실행하도록 단 한 번 연결
+        menuBtn.onclick = () => {
+            document.getElementById('quill-media-context-menu').style.display = 'none';
+            if (NoticeEditor.activeInstance) {
+                NoticeEditor.activeInstance.triggerEditModalFromMenu();
+            }
+        };
     }
 
+    // 📌 각 인스턴스 전용 UI (ID 중복을 막기 위해 핵심 요소들을 class 기반으로 변경)
     renderUI() {
         this.container.style.cssText = "padding: 15px; margin-bottom: 20px; background: #fdfdfd; border: 1px dashed #1a73e8; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;";
         this.container.innerHTML = `
-            <div style="font-weight:bold; color:#1a73e8; font-size:14px; margin-bottom:5px;" id="admin-form-title">📝 새 글 작성</div>
-            <input type="text" id="new-notice-title" placeholder="제목" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+            <div style="font-weight:bold; color:#1a73e8; font-size:14px; margin-bottom:5px;" class="admin-form-title">📝 새 글 작성</div>
+            <input type="text" class="new-notice-title" placeholder="제목" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
             
-            <div id="editor-wrapper" style="background:#fff; border-radius:4px;">
-                <div id="new-notice-editor" style="height: 250px; font-size: 14px;"></div>
+            <div class="editor-wrapper" style="background:#fff; border-radius:4px;">
+                <div class="new-notice-editor" style="height: 250px; font-size: 14px;"></div>
             </div>
             
             <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; margin-top: 4px;">
-                <div id="latex-guide-toggle" style="background: #f8fafc; padding: 8px 12px; font-size: 13px; font-weight: bold; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                <div class="latex-guide-toggle" style="background: #f8fafc; padding: 8px 12px; font-size: 13px; font-weight: bold; color: #475569; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
                     <span>📐 LaTeX 수식 작성 문법 가이드 보기</span>
-                    <span id="latex-guide-arrow" style="transition: transform 0.2s;">▶</span>
+                    <span class="latex-guide-arrow" style="transition: transform 0.2s;">▶</span>
                 </div>
-                <div id="latex-guide-content" style="display: none; padding: 12px; background: #ffffff; font-size: 13px; border-top: 1px solid #e2e8f0; line-height: 1.6; max-height: 250px; overflow-y: auto;"></div>
+                <div class="latex-guide-content" style="display: none; padding: 12px; background: #ffffff; font-size: 13px; border-top: 1px solid #e2e8f0; line-height: 1.6; max-height: 250px; overflow-y: auto;"></div>
             </div>
             
             <div style="font-weight:bold; font-size:12px; color:#555; margin-top:10px;">📎 파일 / 링크 첨부 (다중 지원)</div>
-            <div id="link-inputs-container" style="display:flex; flex-direction:column; gap:8px;"></div>
+            <div class="link-inputs-container" style="display:flex; flex-direction:column; gap:8px;"></div>
             
             <div style="display:flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                <button type="button" id="btn-add-link-row" style="background:none; border:1px solid #5f6368; color:#5f6368; border-radius:4px; padding:6px 12px; font-size:12px; cursor:pointer;">+ 링크 입력칸 추가</button>
+                <button type="button" class="btn-add-link-row" style="background:none; border:1px solid #5f6368; color:#5f6368; border-radius:4px; padding:6px 12px; font-size:12px; cursor:pointer;">+ 링크 입력칸 추가</button>
                 <div style="display:flex; gap:10px;">
-                    <button type="button" id="btn-cancel-edit" style="display:none; background:#f1f3f4; color:#333; border:none; border-radius:4px; padding: 8px 16px; cursor:pointer;">수정 취소</button>
-                    <button id="btn-submit-notice" class="cl-btn-primary" style="padding: 8px 16px; cursor:pointer; background:#1a73e8; color:white; border:none; border-radius:4px;">저장하기</button>
+                    <button type="button" class="btn-cancel-edit" style="display:none; background:#f1f3f4; color:#333; border:none; border-radius:4px; padding: 8px 16px; cursor:pointer;">수정 취소</button>
+                    <button class="btn-submit-notice cl-btn-primary" style="padding: 8px 16px; cursor:pointer; background:#1a73e8; color:white; border:none; border-radius:4px;">저장하기</button>
                 </div>
             </div>
         `;
@@ -121,7 +133,10 @@ export class NoticeEditor {
     initQuill() {
         if (!window.Quill) return;
 
-        this.quill = new Quill('#new-notice-editor', {
+        // 💡 [해결] 전체 문서가 아닌, 현재 인스턴스 컨테이너 내부의 에디터 요소를 정확히 지목하여 할당
+        const targetEditorTarget = this.container.querySelector('.new-notice-editor');
+        
+        this.quill = new Quill(targetEditorTarget, {
             theme: 'snow',
             placeholder: '본문 내용 입력 (볼드, 색상, 수식 및 이미지/동영상 삽입 가능)',
             modules: {
@@ -314,14 +329,28 @@ export class NoticeEditor {
         h.style.background = disabled ? "#f1f3f4" : "#fff";
     }
 
+    // 전역 공유 메뉴 클릭 시 실행될 인스턴스 전용 라우터
+    triggerEditModalFromMenu() {
+        const node = this.modalState.targetNode;
+        if (!node) return;
+        const currentW = parseFloat(node.getAttribute('width') || node.style.width || node.clientWidth);
+        const currentH = parseFloat(node.getAttribute('height') || node.style.height || node.clientHeight);
+        this.modalState.ratio = currentW / currentH; 
+        this.openMediaModal('edit', this.modalState.type, node, currentW, currentH);
+    }
+
     initEvents() {
         const contextMenu = document.getElementById('quill-media-context-menu');
 
-        // 🖱️ 우클릭 크기 조절 메뉴 바인딩
+        // 🖱️ 우클릭 크기 조절 메뉴 바인딩 (현재 컨테이너의 에디터에만 한정되도록 연결)
         const editorContent = this.container.querySelector('.ql-editor');
         editorContent.addEventListener('contextmenu', (e) => {
             if (['IMG', 'IFRAME', 'VIDEO'].includes(e.target.tagName)) {
                 e.preventDefault(); 
+                
+                // 💡 [해결] 우클릭이 발생한 이 에디터 객체를 전역 활성 인스턴스로 등록
+                NoticeEditor.activeInstance = this;
+
                 contextMenu.style.display = 'block';
                 contextMenu.style.left = e.clientX + 'px';
                 contextMenu.style.top = e.clientY + 'px';
@@ -330,25 +359,15 @@ export class NoticeEditor {
             }
         });
 
-        document.getElementById('menu-item-edit-media').onclick = () => {
-            contextMenu.style.display = 'none';
-            const node = this.modalState.targetNode;
-            const currentW = parseFloat(node.getAttribute('width') || node.style.width || node.clientWidth);
-            const currentH = parseFloat(node.getAttribute('height') || node.style.height || node.clientHeight);
-            this.modalState.ratio = currentW / currentH; 
-            this.openMediaModal('edit', this.modalState.type, node, currentW, currentH);
-        };
-
         document.addEventListener('click', (e) => {
             if (!e.target.closest('#quill-media-context-menu')) contextMenu.style.display = 'none';
         });
 
-        // 💡 [핵심 기능] 복사+붙여넣기(Ctrl+V) 시 Base64를 차단하고 Cloudinary 서버로 자동 업로드
+        // 💡 [핵심 기능] 복사+붙여넣기(Ctrl+V) 자동 업로드 바인딩
         this.quill.root.addEventListener('paste', async (e) => {
             const clipboardData = e.clipboardData || window.clipboardData;
             if (!clipboardData || !clipboardData.items) return;
 
-            // 클립보드에 이미지가 있는지 먼저 확인
             let hasImage = false;
             for (let i = 0; i < clipboardData.items.length; i++) {
                 if (clipboardData.items[i].type.indexOf('image') !== -1) {
@@ -358,7 +377,7 @@ export class NoticeEditor {
             }
 
             if (hasImage) {
-                e.preventDefault(); // 기본 붙여넣기 동작(Base64 폭탄 삽입)을 완벽 차단!
+                e.preventDefault(); 
 
                 for (let i = 0; i < clipboardData.items.length; i++) {
                     const item = clipboardData.items[i];
@@ -366,7 +385,6 @@ export class NoticeEditor {
                         const file = item.getAsFile();
                         if (!file) continue;
 
-                        // 로딩 텍스트를 먼저 띄워 피드백 제공
                         const range = this.quill.getSelection(true) || { index: this.quill.getLength() };
                         const placeholder = '[이미지 업로드 중...⏳]';
                         this.quill.insertText(range.index, placeholder);
@@ -379,12 +397,10 @@ export class NoticeEditor {
                             const response = await fetch(this.cloudinaryUrl, { method: 'POST', body: formData });
                             const result = await response.json();
 
-                            // 로딩 텍스트 지우기
                             this.quill.deleteText(range.index, placeholder.length);
 
                             if (result.secure_url) {
                                 this.modalState.type = 'image'; 
-                                // Cloudinary의 짧은 URL을 일반 이미지처럼 삽입하여 크기 조절이 가능하게 만듦
                                 this.insertIntoQuill(result.secure_url, 'auto', 'auto', range.index);
                             } else {
                                 throw new Error('업로드 거부');
@@ -399,17 +415,17 @@ export class NoticeEditor {
             }
         });
 
-        // 폼 등록 및 취소 버튼 등 일반 UI 이벤트
-        this.container.querySelector('#btn-add-link-row').addEventListener('click', () => this.addLinkRow());
-        this.container.querySelector('#link-inputs-container').addEventListener('click', (e) => {
+        // 폼 등록 및 취소 버튼 등 일반 UI 이벤트 바인딩도 고유 컨테이너 기반으로 수정
+        this.container.querySelector('.btn-add-link-row').addEventListener('click', () => this.addLinkRow());
+        this.container.querySelector('.link-inputs-container').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-remove-link-row')) e.target.closest('.link-input-row').remove();
         });
-        this.container.querySelector('#btn-cancel-edit').addEventListener('click', () => {
+        this.container.querySelector('.btn-cancel-edit').addEventListener('click', () => {
             this.reset();
             if (this.callbacks.onCancel) this.callbacks.onCancel();
         });
-        this.container.querySelector('#btn-submit-notice').addEventListener('click', async (e) => {
-            const title = this.container.querySelector('#new-notice-title').value.trim();
+        this.container.querySelector('.btn-submit-notice').addEventListener('click', async (e) => {
+            const title = this.container.querySelector('.new-notice-title').value.trim();
             const bodyHtml = this.quill ? this.quill.root.innerHTML : '';
             if (!title) return alert("제목을 입력해주세요.");
             
@@ -435,9 +451,9 @@ export class NoticeEditor {
             }
         });
 
-        const latexToggleBtn = this.container.querySelector('#latex-guide-toggle');
-        const latexContent = this.container.querySelector('#latex-guide-content');
-        const latexArrow = this.container.querySelector('#latex-guide-arrow');
+        const latexToggleBtn = this.container.querySelector('.latex-guide-toggle');
+        const latexContent = this.container.querySelector('.latex-guide-content');
+        const latexArrow = this.container.querySelector('.latex-guide-arrow');
 
         if (latexToggleBtn) {
             latexContent.innerHTML = this.latexGuide;
@@ -515,7 +531,7 @@ export class NoticeEditor {
     }
 
     addLinkRow(name = '', url = '') {
-        const container = this.container.querySelector('#link-inputs-container');
+        const container = this.container.querySelector('.link-inputs-container');
         const row = document.createElement('div');
         row.className = 'link-input-row';
         row.style.cssText = 'display:flex; gap: 10px; align-items:center;';
@@ -528,18 +544,18 @@ export class NoticeEditor {
     }
 
     setData(title, body, files) {
-        this.container.querySelector('#new-notice-title').value = title;
+        this.container.querySelector('.new-notice-title').value = title;
         if (this.quill) this.quill.clipboard.dangerouslyPasteHTML(body || '');
-        const linkContainer = this.container.querySelector('#link-inputs-container');
+        const linkContainer = this.container.querySelector('.link-inputs-container');
         linkContainer.innerHTML = '';
         if (files && files.length > 0) files.forEach(f => this.addLinkRow(f.name, f.url));
         else this.addLinkRow();
     }
 
     reset() {
-        this.container.querySelector('#new-notice-title').value = '';
+        this.container.querySelector('.new-notice-title').value = '';
         if (this.quill) this.quill.setContents([]);
-        this.container.querySelector('#link-inputs-container').innerHTML = '';
+        this.container.querySelector('.link-inputs-container').innerHTML = '';
         this.addLinkRow();
     }
 }
