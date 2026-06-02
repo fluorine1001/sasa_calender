@@ -160,63 +160,75 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
 .sidebar-overlay { display: none; }
 
 /* ========================================================
-   🚀 [통합 반응형 엔진] 창 크기에 맞춰 동적으로 변화하는 유동형 UI
+   🚀 [재수정본] 폼/모달 UI 유동형 최적화 (기존 사이드바 완벽 보호)
 ======================================================== */
 
-/* [공통] 모든 요소의 크기 계산 방식을 내부 패딩 포함으로 일치 (레이아웃 파괴 방지) */
-*, *::before, *::after {
+/* 1. 모달 및 폼 여백/대칭 최적화 (전역 레이아웃 건드리지 않음!) */
+.modal-content, .cl-modal-box {
+    width: 90% !important;
+    max-width: 460px !important;
+    margin: 0 auto !important;
     box-sizing: border-box !important;
 }
 
-/* 1. 팝업창(모달)의 화면 비례 유동형 너비 설정 */
-.modal-content, .cl-modal-box {
-    width: 92% !important;             
-    max-width: 460px !important;       
-    min-width: 280px !important;       
-    margin: 0 auto !important;         
-    padding: clamp(16px, 4vw, 28px) !important; 
-    display: flex !important;
-    flex-direction: column !important;
-}
-
-/* 2. 메인 콘텐츠 영역 여백의 동적 스케일링 */
-.content {
-    padding: clamp(16px, 3vw, 40px) !important; 
-    width: 100% !important;
-}
-
-/* 3. 폼 내부 요소의 가로 너비 유동화 */
 form, #sasa-credential-form {
-    width: 100% !important;
+    box-sizing: border-box !important;
     padding: 0 !important;
-    margin: 0 !important;
-}
-
-/* 4. 가로 나열형 요소(날짜/시간 선택, 버튼 묶음 등)의 유동형 배치 */
-form div[style*="display: flex"], 
-form div[style*="display:flex"],
-.modal-content div[style*="display: flex"] {
-    display: flex !important;
     width: 100% !important;
-    gap: 10px !important;              
 }
 
-/* 5. 버튼 색상 완벽 통일 (파란색) */
-form div[style*="flex"] > button,
-.modal-content div[style*="flex"] > button {
+/* 2. [요구사항 3] 글자 줄바꿈 방지 및 동적 크기 스케일링 (Fluid Typography) */
+/* 화면 폭이 좁아지면 폰트 크기가 수학적으로 줄어들어 줄바꿈 없이 한 줄에 안착합니다. */
+form label, .form-group label {
+    word-break: keep-all !important;
+    white-space: nowrap !important;
+    font-size: clamp(11px, 3vw, 13px) !important; 
+}
+
+form button, .btn, .modal-content button {
+    word-break: keep-all !important;
+    white-space: nowrap !important;
+    font-size: clamp(12px, 3vw, 14px) !important;
+    padding: clamp(8px, 2vw, 12px) !important;
+}
+
+/* 3. 모달 하단 버튼 색상 완벽 통일 */
+form div[style*="display: flex"] > button,
+form div[style*="display:flex"] > button,
+.modal-content div[style*="display"] > button {
     background-color: #3498db !important; 
     color: #ffffff !important;            
     border: none !important;              
     border-radius: 6px !important;        
-    opacity: 1 !important;
 }
-form div[style*="flex"] > button:hover,
-.modal-content div[style*="flex"] > button:hover {
+form div[style*="display: flex"] > button:hover,
+form div[style*="display:flex"] > button:hover,
+.modal-content div[style*="display"] > button:hover {
     background-color: #2980b9 !important;
 }
 
-/* 6. 모바일 해상도 (480px 이하) - 세로 배치로 전환 */
-@media (max-width: 480px) {
+/* 4. 가로 나열 폼 기본 설정 (여유 공간일 때 50:50 대칭) */
+form div[style*="display: flex"], 
+form div[style*="display:flex"] {
+    display: flex !important;
+    width: 100% !important;
+    gap: 10px !important;
+    box-sizing: border-box !important;
+}
+
+@media (min-width: 421px) {
+    /* 421px 이상: 나란히 배치된 입력칸과 버튼이 정확히 공간 분배 */
+    form div[style*="display: flex"] > *, 
+    form div[style*="display:flex"] > * {
+        flex: 1 1 0% !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+    }
+}
+
+/* 5. [요구사항 1] 부족한 공간(420px 이하): 1열 세로 정렬 */
+/* 창이 너무 작아 글자 크기 축소만으로 버틸 수 없으면 우측 요소를 하단으로 내립니다. */
+@media (max-width: 420px) {
     form div[style*="display: flex"], 
     form div[style*="display:flex"] {
         flex-direction: column !important;
@@ -227,30 +239,17 @@ form div[style*="flex"] > button:hover,
     form div[style*="display:flex"] > * {
         width: 100% !important;
         flex: unset !important;
+        margin: 0 !important;
     }
 }
 
-/* 7. PC/태블릿 해상도 (481px 이상) - 가로 50:50 분배 */
-@media (min-width: 481px) {
-    form div[style*="display: flex"] > input, 
-    form div[style*="display: flex"] > select,
-    form div[style*="display: flex"] > button,
-    form div[style*="display:flex"] > input, 
-    form div[style*="display:flex"] > select,
-    form div[style*="display:flex"] > button,
-    .modal-content div[style*="display: flex"] > button {
-        flex: 1 1 0% !important;       
-        min-width: 0 !important;       
-    }
-}
-
-/* 8. 입력창 및 선택창 시각 편의성 향상 */
+/* 6. 입력창 찌그러짐 방지 및 터치 편의성 확보 */
 input[type="text"], 
 input[type="password"], 
 input[type="date"], 
 input[type="time"], 
 select {
     width: 100% !important;
-    height: 42px !important;           
-    font-size: 14px !important;        
+    height: 42px !important;
+    box-sizing: border-box !important;
 }
