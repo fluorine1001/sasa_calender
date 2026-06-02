@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
-console.log("🚀 assessment.js 로드 완료 (버튼 미작동 오류 및 ID 매칭 완벽 해결)");
+console.log("🚀 assessment.js 로드 완료 (관리자 권한 우회 버그 및 나가기 버튼 완벽 해결)");
 
 // 💡 전역 코어 데이터 상태 관리 구조
 let currentUid = null;
@@ -22,7 +22,7 @@ let gradeSettings = {
 };
 let editingId = null;
 
-// 🔥 타이밍 버그 해결: 문서 로딩 상태에 상관없이 무조건 실행되도록 캡슐화
+// 🔥 타이밍 버그 해결 및 초기화 컴포넌트
 function initAssessmentUI() {
     console.log("✅ 평가 계획 UI 초기화 및 이벤트 바인딩 시작");
 
@@ -64,38 +64,52 @@ function initAssessmentUI() {
 
     loadConfigFromStorage();
 
-    // 🔐 인증 정보 연동 
+    // 🔐 인증 정보 연동 및 관리자 노출 해결 타겟팅
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             currentUid = user.uid;
+            isCurrentUserAdmin = false; // 기본값 초기화
+            
+            // 1. DB 기준 권한 조회 (예외 에러 대응 보호막 적용)
             try {
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (userDoc.exists() && userDoc.data().role === 'admin') {
                     isCurrentUserAdmin = true;
-                } else if (user.email && user.email.includes('admin')) {
-                    isCurrentUserAdmin = true;
                 }
             } catch (e) {
-                console.warn("관리자 식별 로직 우회 처리:", e);
+                console.warn("Firestore 관리자 검증 우회 가동 (이메일 검사 독립 실행):", e);
             }
             
-            // 관리자 전용 버튼 표시 제어
+            // 2. 이메일 기준 식별 (try-catch 외부 분리하여 무조건 실행 보장)
+            if (user.email && (user.email.toLowerCase().includes('admin') || user.email.toLowerCase().includes('master'))) {
+                isCurrentUserAdmin = true;
+            }
+            
+            console.log("🔒 최종 관리자 식별 권한 상태:", isCurrentUserAdmin);
+            
+            // 🛠️ 관리자 전용 버튼 표시 제어 (CSS 우선순위 씹힘 방지 !important 처리)
             if (isCurrentUserAdmin) {
-                document.querySelectorAll('.admin-only, #btn-admin-add').forEach(el => el.style.display = 'inline-block');
+                document.querySelectorAll('.admin-only, #btn-admin-add').forEach(el => {
+                    el.style.setProperty('display', 'inline-block', 'important');
+                });
             } else {
-                document.querySelectorAll('.admin-only, #btn-admin-add').forEach(el => el.style.display = 'none');
+                document.querySelectorAll('.admin-only, #btn-admin-add').forEach(el => {
+                    el.style.setProperty('display', 'none', 'important');
+                });
             }
             startSnapshotSync();
         } else {
             currentUid = null;
             isCurrentUserAdmin = false;
-            document.querySelectorAll('.admin-only, #btn-admin-add').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.admin-only, #btn-admin-add').forEach(el => {
+                el.style.setProperty('display', 'none', 'important');
+            });
             if (unsubscribeAssessments) unsubscribeAssessments();
         }
     });
 
-    // 🔍 실시간 검색 바 바인딩 (수정: search-input)
+    // 🔍 실시간 검색 바 바인딩
     document.getElementById('search-input')?.addEventListener('input', renderList);
 
     // ⚙️ 개인 설정 판넬 컨트롤러
@@ -106,12 +120,16 @@ function initAssessmentUI() {
             renderSettingsModalTree();
             if (modalView) {
                 modalView.style.display = 'flex';
-            } else {
-                alert("설정 모달창을 찾을 수 없습니다. HTML 하단에 팝업 코드가 있는지 확인해주세요.");
             }
         });
     }
 
+    // 🆕 [요구사항 2] 설정 모달창 단순 '나가기' 버튼 기능 바인딩 (저장 안 하고 닫기)
+    document.getElementById('btn-cancel-settings')?.addEventListener('click', () => {
+        if (modalView) modalView.style.display = 'none';
+    });
+
+    // 설정 저장 및 닫기 버튼
     document.getElementById('btn-close-settings')?.addEventListener('click', () => {
         document.querySelectorAll('.setting-grade-visible').forEach(chk => {
             const gradeKey = chk.dataset.grade;
@@ -148,7 +166,7 @@ function initAssessmentUI() {
         renderList();
     });
 
-    // ➕ 관리자 기입 폼 동작 처리 (수정: btn-admin-add)
+    // ➕ 관리자 기입 폼 동작 처리
     const writeFormModal = document.getElementById('assessment-form-modal');
     const btnAdminAdd = document.getElementById('btn-admin-add');
     if (btnAdminAdd) {
@@ -156,11 +174,7 @@ function initAssessmentUI() {
             editingId = null;
             document.getElementById('assessment-modal-title').innerText = '➕ 평가 계획 항목 추가';
             document.getElementById('assessment-item-form').reset();
-            if (writeFormModal) {
-                writeFormModal.style.display = 'flex';
-            } else {
-                alert("추가 모달창을 찾을 수 없습니다. HTML 하단에 팝업 코드가 있는지 확인해주세요.");
-            }
+            if (writeFormModal) writeFormModal.style.display = 'flex';
         });
     }
 
@@ -190,19 +204,19 @@ function initAssessmentUI() {
             if (writeFormModal) writeFormModal.style.display = 'none';
         } catch (err) {
             console.error("Cloud Firestore 트랜잭션 에러:", err);
-            alert("❌ 학사 디바이스 데이터베이스 처리에 오류가 발생했습니다.");
+            alert("❌ 데이터베이스 처리에 오류가 발생했습니다.");
         }
     });
 }
 
-// 🔥 스크립트 실행 시점에 DOM이 이미 그려져 있다면 즉시 실행하고, 아니면 대기합니다 (타이밍 버그 완벽 해결)
+// 초기화 트리거
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAssessmentUI);
 } else {
     initAssessmentUI();
 }
 
-// 🔄 파이어베이스 실시간 스트림 파이프라인 개방
+// 🔄 파이어베이스 실시간 스트림
 function startSnapshotSync() {
     if (unsubscribeAssessments) unsubscribeAssessments();
     
@@ -219,7 +233,7 @@ function startSnapshotSync() {
         });
         renderList();
     }, (error) => {
-        console.error("Firestore 연결 지연 오프라인 변환:", error);
+        console.error("Firestore 연결 지연:", error);
     });
 }
 
@@ -235,7 +249,7 @@ function flushConfigToStorage() {
     localStorage.setItem('sasa_assessment_user_settings', JSON.stringify(userSettings));
 }
 
-// 📊 핵심 정렬 기법 및 렌더링 뷰엔진 (수정: evaluation-list)
+// 📊 리스트 뷰엔진
 function renderList() {
     const mainViewTarget = document.getElementById('evaluation-list');
     if (!mainViewTarget) return;
@@ -245,7 +259,6 @@ function renderList() {
 
     ['1', '2', '3'].forEach(gradeKey => {
         const currentGradeConf = gradeSettings[gradeKey] || { visible: true, sort: 'priority', expanded: true };
-        
         let matchedItems = subjects.filter(sub => sub.grade === gradeKey);
 
         if (filterKeyword) {
@@ -345,13 +358,11 @@ function renderList() {
     mainViewTarget.innerHTML = combinedHtml;
 }
 
-// 🌟 설정 영역 내의 학년별 트리 종속형 인터페이스 제어
 function renderSettingsModalTree() {
     const treeTarget = document.getElementById('settings-grade-hierarchy-container');
     if (!treeTarget) return;
 
     let treeHtml = '';
-
     ['1', '2', '3'].forEach(gradeKey => {
         const currentGradeMeta = gradeSettings[gradeKey] || { visible: true };
         const itemsInGrade = subjects.filter(sub => sub.grade === gradeKey);
@@ -394,7 +405,7 @@ function renderSettingsModalTree() {
 }
 
 // ==========================================
-// 🔗 전역 이벤트 링크 인터페이스
+// 🔗 전역 이벤트 바인딩 인터페이스
 // ==========================================
 window.toggleGradeAccordion = function(gradeKey) {
     if (gradeSettings[gradeKey]) {
