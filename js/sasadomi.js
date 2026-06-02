@@ -558,7 +558,7 @@ function setupApplicationButtons() {
                             </div>
                             <div style="flex:2;">
                                 <label style="font-size:13px; font-weight:600; color:#475569; display:block; margin-bottom:5px;">사유</label>
-                                <input type="text" id="out-reason" required placeholder="사유 작" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                                <input type="text" id="out-reason" required placeholder="사유 작성" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
                             </div>
                         </div>
                         
