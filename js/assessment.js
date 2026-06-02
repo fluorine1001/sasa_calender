@@ -5,7 +5,7 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 assessment.js 로드 완료 (버튼 기능 정상화 및 학년 지정 패치 적용)");
+console.log("🚀 assessment.js 로드 완료 (고유 ID 바인딩 시스템 적용으로 충돌 해결)");
 
 let currentUid = null;
 let isCurrentUserAdmin = false;
@@ -26,8 +26,8 @@ const defaultLatexGuide = [
     { category: "1. 구별 기호 및 그리스 문자", inputs: [{ syntax: "\\dot{a}, \\ddot{a}", desc: "문자 위 점 기호", example: "$\\dot{a}, \\ddot{a}$" }] }
 ];
 
-document.addEventListener('DOMContentLoaded', () => {
-    // CSS 인젝션
+// 🔒 초기화 실행 함수 (DOMContentLoaded 타이밍 이슈 방지 안전장치)
+function initializeAssessmentModule() {
     if (!document.getElementById('accordion-custom-styles')) {
         const style = document.createElement('style');
         style.id = 'accordion-custom-styles';
@@ -93,30 +93,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('search-input')?.addEventListener('input', renderList);
 
     // ==========================================
-    // ⚙️ 맞춤 설정 모달창 버튼 이벤트 완벽 제어
+    // ⚙️ 고유 ID가 적용된 맞춤 설정 모달창 버튼 제어
     // ==========================================
-    const getModalView = () => document.getElementById('assessment-settings-modal');
+    const settingsModal = document.getElementById('assessment-settings-modal');
 
     // 1. 설정 창 열기
     document.getElementById('btn-user-settings')?.addEventListener('click', () => {
         renderSettingsModalTree();
-        const modal = getModalView();
-        if (modal) modal.style.display = 'flex';
+        if (settingsModal) settingsModal.style.display = 'flex';
     });
 
-    // 2. 상단 X 버튼으로 창 닫기 (하단 나가기 버튼은 삭제됨)
-    // 클래스나 ID에 구애받지 않도록 모달 내부의 X 버튼들을 모두 탐색하여 닫기 이벤트를 겁니다.
-    document.querySelectorAll('#assessment-settings-modal button').forEach(btn => {
-        if (btn.innerText.includes('✕') || btn.id === 'btn-close-settings-x') {
-            btn.addEventListener('click', () => {
-                const modal = getModalView();
-                if (modal) modal.style.display = 'none';
-            });
-        }
+    // 2. 상단 ✕ 버튼 이벤트 바인딩
+    document.getElementById('assessment-btn-close-x')?.addEventListener('click', () => {
+        if (settingsModal) settingsModal.style.display = 'none';
     });
 
-    // 3. 설정 저장 및 닫기 버튼
-    document.getElementById('btn-close-settings')?.addEventListener('click', () => {
+    // 3. 설정 저장 및 닫기 버튼 (중복 완벽 해결)
+    document.getElementById('assessment-btn-save')?.addEventListener('click', () => {
         document.querySelectorAll('.setting-grade-visible').forEach(chk => {
             const gradeKey = chk.dataset.grade;
             if (gradeSettings[gradeKey]) gradeSettings[gradeKey].visible = chk.checked;
@@ -139,15 +132,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         flushConfigToStorage();
         renderList();
-        
-        const modal = getModalView();
-        if (modal) modal.style.display = 'none';
-        
+        if (settingsModal) settingsModal.style.display = 'none';
         alert("✅ 맞춤 설정이 성공적으로 저장되었습니다.");
     });
 
-    // 4. 기본값 초기화 버튼
-    document.getElementById('btn-reset-settings')?.addEventListener('click', () => {
+    // 4. 기본값 초기화 버튼 (중복 완벽 해결)
+    document.getElementById('assessment-btn-reset')?.addEventListener('click', () => {
         if (!confirm("모든 설정을 초기화하고 기본 상태로 되돌리시겠습니까?")) return;
         gradeSettings = {
             '1': { visible: true, sort: 'priority', expanded: true },
@@ -157,14 +147,13 @@ document.addEventListener('DOMContentLoaded', () => {
         userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
         
         flushConfigToStorage();
-        renderSettingsModalTree(); // 초기화 즉시 화면 리렌더링
+        renderSettingsModalTree(); 
         renderList();
-        
-        alert("🔄 설정이 기본값으로 초기화되었습니다. (저장 및 닫기 버튼을 눌러 완료해주세요)");
+        alert("🔄 설정이 초기화되었습니다. '설정 저장 및 닫기'를 누르면 최종 반영됩니다.");
     });
 
     // ==========================================
-    // ➕ "새 계획 추가" 버튼 클릭 시 학년 선택 기능
+    // ➕ "새 계획 추가" 클릭 이벤트 (고유 ID 연동)
     // ==========================================
     document.getElementById('btn-admin-add')?.addEventListener('click', () => {
         editingId = null;
@@ -172,30 +161,28 @@ document.addEventListener('DOMContentLoaded', () => {
             editorInstance.reset();
         }
         
-        // 에디터 진입 시 대상 학년을 기본값(1학년)으로 리셋해둡니다.
-        const gradeSelect = document.getElementById('editor-grade-select');
-        const publicCheck = document.getElementById('editor-public-check');
+        const gradeSelect = document.getElementById('assessment-editor-grade-select');
+        const publicCheck = document.getElementById('assessment-editor-public-check');
         if (gradeSelect) gradeSelect.value = "1";
         if (publicCheck) publicCheck.checked = true;
         
         switchToEditorView(); 
     });
-});
+}
 
-// 🛠️ 리치 에디터 라이브러리 연동부 (학년 지정 저장 로직 포함)
+// 🛠️ 리치 에디터 라이브러리 연동 (고유 컨테이너 ID 바인딩)
 function initRichEditorInstance() {
-    if (editorInstance || !document.getElementById('editor-container')) return;
+    if (editorInstance || !document.getElementById('assessment-editor-container')) return;
 
-    editorInstance = new NoticeEditor('editor-container', defaultLatexGuide, {
+    // 중복 방지를 위해 고유 컨테이너 ID 'assessment-editor-container' 사용
+    editorInstance = new NoticeEditor('assessment-editor-container', defaultLatexGuide, {
         onSubmit: async (data) => {
-            // 사용자가 선택한 학년 정보를 가져옵니다 (1학년/2학년/3학년)
-            const gradeSelect = document.getElementById('editor-grade-select');
-            const publicCheck = document.getElementById('editor-public-check');
+            const gradeSelect = document.getElementById('assessment-editor-grade-select');
+            const publicCheck = document.getElementById('assessment-editor-public-check');
             
             const selectedGrade = gradeSelect ? gradeSelect.value : "1";
             const isPublicChecked = publicCheck ? publicCheck.checked : true;
 
-            // 저장할 데이터 포맷 (grade 속성에 선택한 학년이 반영됨)
             const payload = {
                 grade: selectedGrade,
                 title: data.title,
@@ -217,7 +204,7 @@ function initRichEditorInstance() {
                 editingId = null;
                 if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
                 switchToListView();
-                alert(`✅ 성공적으로 저장되어 ${selectedGrade}학년 탭에 등록되었습니다.`);
+                alert(`✅ 성공적으로 저장되어 ${selectedGrade}학년 계획에 등록되었습니다.`);
             } catch (err) {
                 console.error("Firestore 트랜잭션 에러:", err);
                 alert("❌ 저장 도중 문제가 발생했습니다.");
@@ -232,13 +219,17 @@ function initRichEditorInstance() {
 }
 
 function switchToListView() {
-    document.getElementById('tab-list-view').style.display = 'block';
-    document.getElementById('tab-editor-view').style.display = 'none';
+    const listView = document.getElementById('tab-list-view');
+    const editorView = document.getElementById('assessment-tab-editor-view');
+    if (listView) listView.style.display = 'block';
+    if (editorView) editorView.style.display = 'none';
 }
 
 function switchToEditorView() {
-    document.getElementById('tab-list-view').style.display = 'none';
-    document.getElementById('tab-editor-view').style.display = 'block';
+    const listView = document.getElementById('tab-list-view');
+    const editorView = document.getElementById('assessment-tab-editor-view');
+    if (listView) listView.style.display = 'none';
+    if (editorView) editorView.style.display = 'block';
 }
 
 function startSnapshotSync() {
@@ -271,7 +262,6 @@ function flushConfigToStorage() {
     localStorage.setItem('sasa_assessment_user_settings', JSON.stringify(userSettings));
 }
 
-// 📊 메인 리스트 렌더링
 function renderList() {
     const mainViewTarget = document.getElementById('evaluation-list');
     if (!mainViewTarget) return;
@@ -387,7 +377,6 @@ function renderList() {
     mainViewTarget.innerHTML = combinedHtml;
 }
 
-// ⚙️ 맞춤 설정 계층 구조 렌더링
 function renderSettingsModalTree() {
     const treeTarget = document.getElementById('settings-grade-hierarchy-container');
     if (!treeTarget) return;
@@ -434,7 +423,6 @@ function renderSettingsModalTree() {
     treeTarget.innerHTML = treeHtml;
 }
 
-// 🔗 전역 인라인 이벤트 가교
 window.toggleGradeAccordion = function(gradeKey) {
     if (gradeSettings[gradeKey]) {
         gradeSettings[gradeKey].expanded = !gradeSettings[gradeKey].expanded;
@@ -476,9 +464,8 @@ window.editAssessmentItem = function(docId) {
 
     editingId = docId;
     
-    // 수정 시에도 기존에 지정했던 학년이 그대로 셀렉트 박스에 반영됩니다.
-    const gradeSelect = document.getElementById('editor-grade-select');
-    const publicCheck = document.getElementById('editor-public-check');
+    const gradeSelect = document.getElementById('assessment-editor-grade-select');
+    const publicCheck = document.getElementById('assessment-editor-public-check');
     if (gradeSelect) gradeSelect.value = object.grade || '1';
     if (publicCheck) publicCheck.checked = object.isPublic !== false;
 
@@ -497,3 +484,10 @@ window.deleteAssessmentItem = async function(docId) {
         console.error("Firestore 삭제 실패:", err);
     }
 };
+
+// ⚡ 브라우저 로딩 상태에 맞춰 안전하게 실행 유도
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeAssessmentModule);
+} else {
+    initializeAssessmentModule();
+}
