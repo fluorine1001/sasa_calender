@@ -377,3 +377,48 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
         padding: 16px !important;
     }
 }
+
+/* ========================================================
+   ✨ [최종 교정] 모바일 UI 좌우 여백(Padding) 완벽 대칭 정렬
+======================================================== */
+@media (max-width: 768px) {
+    /* 1. 모달창(팝업) 및 카드를 화면 중앙에 강제 대칭 배치 */
+    .modal-content, .cl-modal-box, .card {
+        width: calc(100% - 32px) !important; /* 화면 좌우 정확히 16px씩 여백 확보 */
+        max-width: 400px !important;
+        margin: 0 auto !important; /* 완벽한 가운데 정렬 */
+        padding: 20px !important;  /* 상하좌우 동일한 패딩 부여 */
+        box-sizing: border-box !important;
+    }
+
+    /* 2. 폼 내부에 중복 적용되던 패딩 제거 (우측 쏠림 현상의 주원인) */
+    form, #sasa-credential-form, .form-group {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 3. 가로 배치(Flex) 컨테이너가 100%를 초과하지 못하도록 잠금 */
+    form div[style*="flex"], 
+    .modal-content div[style*="display"] {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    /* 4. ⭐️ 핵심: 나란히 있는 시간 선택칸이나 버튼들이 무조건 1:1 비율로 나뉘도록 강제 */
+    form div[style*="flex"] > input, 
+    form div[style*="flex"] > select,
+    form div[style*="flex"] > button,
+    .modal-content div[style*="display"] > button {
+        flex: 1 1 0% !important; /* 내용물 크기를 무시하고 남은 공간을 정확히 반반씩 분배 */
+        min-width: 0 !important; /* 요소가 박스를 뚫고 나가는 것 원천 차단 */
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+}
