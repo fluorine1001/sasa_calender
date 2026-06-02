@@ -5,32 +5,31 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 assessment.js 로드 완료 (리치 에디터 인프라 및 맞춤설정 버그 완전 수정 완료)");
+console.log("🚀 assessment.js 로드 완료 (버튼 클릭 무반응 및 UI 증발 버그 완벽 수정)");
 
 // 💡 전역 코어 데이터 상태 관리 구조
 let currentUid = null;
 let isCurrentUserAdmin = false;
 let unsubscribeAssessments = null;
-let editorInstance = null; // 리치 에디터 인스턴스 보관용
-let editingId = null;      // 수정 중인 문서 ID 보관용
+let editorInstance = null; 
+let editingId = null;      
 
 let subjects = []; 
-let userSettings = []; // 개별 과목 캐시: [{id: 'docId', visible: true, priority: 1}]
+let userSettings = []; 
 
-// 🌟 학년별 제어 기본 객체
+// 🌟 학년별 독립 제어 정보 기본 객체
 let gradeSettings = {
     '1': { visible: true, sort: 'priority', expanded: true },
     '2': { visible: true, sort: 'priority', expanded: true },
     '3': { visible: true, sort: 'priority', expanded: true }
 };
 
-// 📎 리치 에디터용 기본 수식 가이드 데이터
 const defaultLatexGuide = [
     { category: "1. 구별 기호 및 그리스 문자", inputs: [{ syntax: "\\dot{a}, \\ddot{a}", desc: "문자 위 점 기호", example: "$\\dot{a}, \\ddot{a}$" }] }
 ];
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 🎨 독자적인 아코디언 컴포넌트 전용 CSS 주입
+    // 🎨 아코디언 컴포넌트 전용 CSS
     if (!document.getElementById('accordion-custom-styles')) {
         const style = document.createElement('style');
         style.id = 'accordion-custom-styles';
@@ -54,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .settings-grade-block { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 14px; padding: 14px; background: #f8fafc; }
             .settings-grade-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 14px; color: #2d3748; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
             .settings-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border-bottom: 1px solid #edf2f7; background: #fff; border-radius: 4px; margin-bottom: 5px; }
-            .settings-item:last-child { margin-bottom: 0; }
             .settings-item-info { display: flex; align-items: center; gap: 10px; font-size: 13px; }
             .settings-item-controls { display: flex; align-items: center; gap: 10px; }
             .setting-priority { width: 52px; padding: 4px; border: 1px solid #cbd5e0; border-radius: 4px; text-align: center; font-size: 12px; }
@@ -68,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadConfigFromStorage();
 
-    // 🔐 dashboard.js 연동 규격 맞춤형 어드민 계정 인증 및 감시부
+    // 🔐 어드민 계정 인증부
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
         if (user) {
@@ -81,44 +79,46 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (isCurrentUserAdmin) {
-                document.querySelectorAll('.admin-only').forEach(el => el.style.setProperty('display', 'inline-block', 'important'));
-                initRichEditorInstance(); // 🛠️ 어드민일 때 리치 에디터 초기화 가동 (크래시 유발 요소 제거됨)
+                // 권한 확인 완료 시 '새 계획 추가' 버튼 노출 및 에디터 초기화
+                document.querySelectorAll('#btn-admin-add, .admin-only').forEach(el => el.style.setProperty('display', 'inline-block', 'important'));
+                initRichEditorInstance(); 
             } else {
-                document.querySelectorAll('.admin-only').forEach(el => el.style.setProperty('display', 'none', 'important'));
+                document.querySelectorAll('#btn-admin-add, .admin-only').forEach(el => el.style.setProperty('display', 'none', 'important'));
             }
             startSnapshotSync();
         } else {
             currentUid = null;
             isCurrentUserAdmin = false;
-            document.querySelectorAll('.admin-only').forEach(el => el.style.setProperty('display', 'none', 'important'));
+            document.querySelectorAll('#btn-admin-add, .admin-only').forEach(el => el.style.setProperty('display', 'none', 'important'));
             if (unsubscribeAssessments) unsubscribeAssessments();
         }
     });
 
-    document.getElementById('assessment-search')?.addEventListener('input', renderList);
+    // 🔍 실시간 검색창 (ID 매칭 확인: search-input)
+    document.getElementById('search-input')?.addEventListener('input', renderList);
 
     // ==========================================
-    // ⚙️ 맞춤 설정 모달 및 세 버튼 버그 전면 수정 영역
+    // ⚙️ 맞춤 설정 모달창 버튼 이벤트 (원인 3 해결)
     // ==========================================
     const modalView = document.getElementById('assessment-settings-modal');
 
-    // 맞춤설정 창 열기
+    // 1. 설정 창 열기 (ID 매칭 완료: btn-user-settings)
     document.getElementById('btn-user-settings')?.addEventListener('click', () => {
         renderSettingsModalTree();
         if (modalView) modalView.style.display = 'flex';
     });
 
-    // ✕ 버튼 처리
-    document.getElementById('btn-close-settings-x')?.addEventListener('click', () => {
-        if (modalView) modalView.style.display = 'none';
-    });
-
-    // 나가기 버튼 처리 (요구사항 2 해결)
+    // 2. 나가기 버튼 (ID 매칭 완료: btn-cancel-settings)
     document.getElementById('btn-cancel-settings')?.addEventListener('click', () => {
         if (modalView) modalView.style.display = 'none';
     });
 
-    // 설정 저장 및 닫기 버튼 처리 (요구사항 2 해결)
+    // 상단 X 버튼 
+    document.getElementById('btn-close-settings-x')?.addEventListener('click', () => {
+        if (modalView) modalView.style.display = 'none';
+    });
+
+    // 3. 설정 저장 및 닫기 버튼
     document.getElementById('btn-close-settings')?.addEventListener('click', () => {
         document.querySelectorAll('.setting-grade-visible').forEach(chk => {
             const gradeKey = chk.dataset.grade;
@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderList();
     });
 
-    // 기본값 초기화 버튼 처리 (요구사항 2 해결)
+    // 4. 기본값 초기화 버튼
     document.getElementById('btn-reset-settings')?.addEventListener('click', () => {
         if (!confirm("모든 설정을 초기화하고 기본 상태로 되돌리시겠습니까?")) return;
         gradeSettings = {
@@ -155,39 +155,46 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
         flushConfigToStorage();
-        renderSettingsModalTree();
+        renderSettingsModalTree(); // 초기화 후 화면 다시 그리기
         renderList();
     });
 
     // ==========================================
-    // ➕ 새 계획 추가 기능 연동 (요구사항 3 해결)
+    // ➕ "새 계획 추가" 버튼 클릭 이벤트 (원인 1 해결)
     // ==========================================
-    document.getElementById('btn-add-assessment')?.addEventListener('click', () => {
+    // 기존의 잘못된 'btn-add-assessment' 대신 'btn-admin-add' ID 사용
+    document.getElementById('btn-admin-add')?.addEventListener('click', () => {
         editingId = null;
-        if (editorInstance) editorInstance.reset();
+        if (editorInstance && typeof editorInstance.reset === 'function') {
+            editorInstance.reset();
+        }
         
-        document.getElementById('editor-grade-select').value = "1";
-        document.getElementById('editor-public-check').checked = true;
+        const gradeSelect = document.getElementById('editor-grade-select');
+        const publicCheck = document.getElementById('editor-public-check');
+        if (gradeSelect) gradeSelect.value = "1";
+        if (publicCheck) publicCheck.checked = true;
         
-        switchToEditorView(); // 에디터 뷰 활성화 및 리스트 숨김
+        switchToEditorView(); // 에디터 뷰로 전환
     });
 });
 
-// 🛠️ rich-editor.js 기능 활용 주입부 (요구사항 1 해결)
+// 🛠️ 리치 에디터 라이브러리 연동부
 function initRichEditorInstance() {
     if (editorInstance || !document.getElementById('editor-container')) return;
 
-    // rich-editor.js 가 제공하는 고유 구조 호출 생성
     editorInstance = new NoticeEditor('editor-container', defaultLatexGuide, {
         onSubmit: async (data) => {
-            const selectedGrade = document.getElementById('editor-grade-select').value;
-            const isPublicChecked = document.getElementById('editor-public-check').checked;
+            const gradeSelect = document.getElementById('editor-grade-select');
+            const publicCheck = document.getElementById('editor-public-check');
+            
+            const selectedGrade = gradeSelect ? gradeSelect.value : "1";
+            const isPublicChecked = publicCheck ? publicCheck.checked : true;
 
             const payload = {
                 grade: selectedGrade,
-                title: data.title,       // rich-editor가 리턴하는 제목 값
-                content: data.bodyHtml,  // rich-editor가 리턴하는 Quill HTML 바디 값
-                files: data.files || [], // rich-editor가 리턴하는 첨부링크 리스트
+                title: data.title,
+                content: data.bodyHtml, 
+                files: data.files || [],  
                 isPublic: isPublicChecked,
                 updatedAt: serverTimestamp()
             };
@@ -202,29 +209,30 @@ function initRichEditorInstance() {
                     await setDoc(generatedRef, payload);
                 }
                 editingId = null;
-                editorInstance.reset();
+                if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
                 switchToListView();
             } catch (err) {
-                console.error("Firestore 평가계획 트랜잭션 에러:", err);
+                console.error("Firestore 트랜잭션 에러:", err);
                 alert("❌ 저장 도중 문제가 발생했습니다.");
             }
         },
         onCancel: () => {
             editingId = null;
-            editorInstance.reset();
+            if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
             switchToListView();
         }
     });
 }
 
+// 🔄 화면 전환 함수 수정 (원인 4 해결: tab-list-view 전체 토글)
 function switchToListView() {
-    document.getElementById('evaluation-list').style.setProperty('display', 'block', 'important');
-    document.getElementById('tab-editor-view').style.setProperty('display', 'none', 'important');
+    document.getElementById('tab-list-view').style.display = 'block';
+    document.getElementById('tab-editor-view').style.display = 'none';
 }
 
 function switchToEditorView() {
-    document.getElementById('evaluation-list').style.setProperty('display', 'none', 'important');
-    document.getElementById('tab-editor-view').style.setProperty('display', 'block', 'important');
+    document.getElementById('tab-list-view').style.display = 'none';
+    document.getElementById('tab-editor-view').style.display = 'block';
 }
 
 function startSnapshotSync() {
@@ -257,12 +265,12 @@ function flushConfigToStorage() {
     localStorage.setItem('sasa_assessment_user_settings', JSON.stringify(userSettings));
 }
 
-// 📊 학년별 평가 목록 아코디언 메인 렌더러
+// 📊 메인 리스트 렌더링
 function renderList() {
     const mainViewTarget = document.getElementById('evaluation-list');
     if (!mainViewTarget) return;
 
-    const filterKeyword = document.getElementById('assessment-search')?.value.toLowerCase() || '';
+    const filterKeyword = document.getElementById('search-input')?.value.toLowerCase() || '';
     let combinedHtml = '';
 
     ['1', '2', '3'].forEach(gradeKey => {
@@ -271,8 +279,8 @@ function renderList() {
 
         if (filterKeyword) {
             matchedItems = matchedItems.filter(sub => 
-                sub.title.toLowerCase().includes(filterKeyword) || 
-                sub.content.toLowerCase().includes(filterKeyword)
+                (sub.title && sub.title.toLowerCase().includes(filterKeyword)) || 
+                (sub.content && sub.content.toLowerCase().includes(filterKeyword))
             );
         }
 
@@ -296,10 +304,10 @@ function renderList() {
                 const prioA = userSettings.find(s => s.id === a.id)?.priority || 1;
                 const prioB = userSettings.find(s => s.id === b.id)?.priority || 1;
                 if (prioA !== prioB) return prioA - prioB;
-                return a.title.localeCompare(b.title, 'ko');
+                return (a.title || '').localeCompare(b.title || '', 'ko');
             });
         } else if (activeSortStrategy === 'alphabetical') {
-            visibleItems.sort((a, b) => a.title.localeCompare(b.title, 'ko'));
+            visibleItems.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ko'));
         } else if (activeSortStrategy === 'latest') {
             visibleItems.sort((a, b) => {
                 const ticksA = a.createdAt?.seconds || 0;
@@ -373,10 +381,13 @@ function renderList() {
     mainViewTarget.innerHTML = combinedHtml;
 }
 
-// ⚙️ 맞춤 설정 계층 구조 트리 형성 뷰어 (ID 정밀 맵핑 완료)
+// ⚙️ 맞춤 설정 계층 구조 렌더링 (원인 2 해결: settings-grade-hierarchy-container 매칭 완료)
 function renderSettingsModalTree() {
     const treeTarget = document.getElementById('settings-grade-hierarchy-container');
-    if (!treeTarget) return;
+    if (!treeTarget) {
+        console.error("설정 모달 컨테이너를 찾을 수 없습니다.");
+        return;
+    }
 
     let treeHtml = '';
     ['1', '2', '3'].forEach(gradeKey => {
@@ -420,9 +431,7 @@ function renderSettingsModalTree() {
     treeTarget.innerHTML = treeHtml;
 }
 
-// ==========================================
-// 🔗 전역 인라인 이벤트 가교 바인딩
-// ==========================================
+// 🔗 전역 인라인 이벤트 가교
 window.toggleGradeAccordion = function(gradeKey) {
     if (gradeSettings[gradeKey]) {
         gradeSettings[gradeKey].expanded = !gradeSettings[gradeKey].expanded;
@@ -464,14 +473,16 @@ window.editAssessmentItem = function(docId) {
 
     editingId = docId;
     
-    document.getElementById('editor-grade-select').value = object.grade || '1';
-    document.getElementById('editor-public-check').checked = object.isPublic !== false;
+    const gradeSelect = document.getElementById('editor-grade-select');
+    const publicCheck = document.getElementById('editor-public-check');
+    if (gradeSelect) gradeSelect.value = object.grade || '1';
+    if (publicCheck) publicCheck.checked = object.isPublic !== false;
 
-    if (editorInstance) {
+    if (editorInstance && typeof editorInstance.setData === 'function') {
         editorInstance.setData(object.title || '', object.content || '', object.files || []);
     }
 
-    switchToEditorView();
+    switchToEditorView(); // 에디터 폼 영역 노출
 };
 
 window.deleteAssessmentItem = async function(docId) {
