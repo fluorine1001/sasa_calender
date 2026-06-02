@@ -1,6 +1,6 @@
 import { db } from './firebase-init.js';
 import { 
-    collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp 
+    collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, writeBatch 
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
@@ -81,7 +81,6 @@ function initializeAssessmentModule() {
         } else {
             console.error(`🚨 [ID 매칭 실패!!] "${id}" 요소가 현재 HTML에 존재하지 않습니다! 관련 기능이 100% 작동하지 않습니다.`);
             
-            // 혹시 접두사(assessment-)가 빠진 과거 ID가 남아있는지 보조 확인
             const alternativeId = id.replace('assessment-', '').replace('btn-save', 'btn-close-settings').replace('btn-reset', 'btn-reset-settings').replace('btn-close-x', 'btn-close-settings-x');
             if (document.getElementById(alternativeId)) {
                 console.warn(`💡 [힌트] "${id}" 대신 접두사가 없는 구형 ID "${alternativeId}"가 HTML에 남아있습니다. HTML 태그의 ID를 수정하셔야 합니다!`);
@@ -90,8 +89,6 @@ function initializeAssessmentModule() {
     });
 
     // 📦 [위치 오류 해결 보정 레이아웃 패치]
-    // 에디터 뷰가 메인 콘텐츠 레이아웃 영역 밖(예: body 루트 등)에 배치되어 밀리는 문제를 해결하기 위해
-    // 정상 위치로 잡혀있는 리스트 뷰(#tab-list-view)의 부모 컨테이너 내부 형제 노드로 강제 재배치합니다.
     const listView = document.getElementById('tab-list-view');
     const editorView = document.getElementById('assessment-tab-editor-view') || document.getElementById('tab-editor-view');
     if (listView && editorView && editorView.parentNode !== listView.parentNode) {
@@ -135,9 +132,6 @@ function initializeAssessmentModule() {
         renderList();
     });
 
-    // ==========================================
-    // ⚙️ 맞춤 설정 모달창 버튼 이벤트 바인딩 및 로그
-    // ==========================================
     const settingsModal = document.getElementById('assessment-settings-modal');
 
     // 1. 설정 창 열기 버튼
@@ -218,9 +212,7 @@ function initializeAssessmentModule() {
         });
     }
 
-    // ==========================================
     // ➕ "새 계획 추가" 클릭 이벤트 및 로그
-    // ==========================================
     const btnAdminAdd = document.getElementById('btn-admin-add');
     if (btnAdminAdd) {
         btnAdminAdd.addEventListener('click', () => {
@@ -249,12 +241,8 @@ function initializeAssessmentModule() {
         });
     }
 
-    // ==========================================
     // 🏃 타 메뉴/탭 이동 시 에디터 폼 자동 닫기 핸들러
-    // ==========================================
     document.addEventListener('click', (e) => {
-        // 사이드바 메뉴, 외부 네비게이션 탭 등 다른 메뉴 요소를 클릭했을 경우 감지합니다.
-        // 단, 평가 계획 내부 모달창이나 계획 추가 버튼을 누른 경우는 예외로 둡니다.
         const isExternalTabClick = e.target.closest('.sidebar, #sidebar, .sidebar-menu, .nav-tabs, [data-tab]') && 
                                    !e.target.closest('#btn-admin-add, #btn-user-settings, #assessment-settings-modal');
         
@@ -266,11 +254,10 @@ function initializeAssessmentModule() {
         }
     });
 
-    // 🔄 새로고침 시 무조건 에디터가 닫힌 상태(리스트 뷰)로 첫 노출을 안전하게 보장
     switchToListView();
 }
 
-// 🛠️ 리치 에디터 라이브러리 연동 로그
+// ✍️ 리치 에디터 라이브러리 연동 및 데이터 아이디 기반 분리 저장 설계 적용
 function initRichEditorInstance() {
     const containerId = document.getElementById('assessment-editor-container') ? 'assessment-editor-container' : 'editor-container';
     console.log(`✍️ [Assessment Debug] 에디터 초기화 시도중... 대상 컨테이너 ID: "${containerId}"`);
@@ -295,25 +282,59 @@ function initRichEditorInstance() {
                 const selectedGrade = gradeSelect ? gradeSelect.value : "1";
                 const isPublicChecked = publicCheck ? publicCheck.checked : true;
 
-                const payload = {
-                    grade: selectedGrade,
-                    title: data.title,
-                    content: data.bodyHtml, 
-                    files: data.files || [],  
-                    isPublic: isPublicChecked,
-                    updatedAt: serverTimestamp()
-                };
-
                 try {
+                    const batch = writeBatch(db);
+
                     if (editingId) {
-                        await updateDoc(doc(db, 'assessments', editingId), payload);
-                        console.log(`📝 기존 문서 수정 완료 ID: ${editingId}`);
+                        // [수정 모드] 고유 데이터 참조 ID를 기반으로 공통 알맹이 데이터와 연동 항목 일괄 수정
+                        const currentMeta = subjects.find(sub => sub.id === editingId);
+                        const sharedContentId = currentMeta.contentId;
+
+                        // 1. 알맹이(본문 및 첨부파일) 데이터 업데이트
+                        batch.update(doc(db, 'assessment_contents', sharedContentId), {
+                            content: data.bodyHtml,
+                            files: data.files || []
+                        });
+
+                        // 2. 이 본문을 공유(링크)하고 있는 메타데이터 일괄 동기화 업데이트 (단일 진실 원칙)
+                        const relatedMetas = subjects.filter(sub => sub.contentId === sharedContentId);
+                        relatedMetas.forEach(meta => {
+                            batch.update(doc(db, 'assessments', meta.id), {
+                                title: data.title,
+                                grade: meta.id === editingId ? selectedGrade : meta.grade, // 현재 가리키는 학년 변경 대응
+                                isPublic: isPublicChecked,
+                                updatedAt: serverTimestamp()
+                            });
+                        });
+
+                        await batch.commit();
+                        console.log(`📝 기존 문서 및 연동 본문 수정 완료 ID: ${editingId}`);
                     } else {
-                        const generatedRef = doc(collection(db, 'assessments'));
-                        payload.id = generatedRef.id;
-                        payload.createdAt = serverTimestamp();
-                        await setDoc(generatedRef, payload);
+                        // [신규 등록 모드] 공통으로 사용할 무거운 데이터 본문 ID 선발급 후 링크 연결식 저장
+                        const contentDocRef = doc(collection(db, 'assessment_contents'));
+                        const sharedContentId = contentDocRef.id;
+
+                        // 1. 본문 데이터 전용 컬렉션에 무거운 알맹이 1회만 격리 저장
+                        batch.set(contentDocRef, {
+                            content: data.bodyHtml,
+                            files: data.files || []
+                        });
+
+                        // 2. 참조형 링크 정보를 담은 가벼운 메타데이터 문서 저장
+                        const metaDocRef = doc(collection(db, 'assessments'));
+                        const payload = {
+                            id: metaDocRef.id,
+                            grade: selectedGrade,
+                            title: data.title,
+                            contentId: sharedContentId, // 고유 데이터 아이디 연결 고리
+                            isPublic: isPublicChecked,
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp()
+                        };
+                        batch.set(metaDocRef, payload);
                         console.log(`✨ 신규 문서 추가 완료 생성된 ID: ${payload.id}`);
+
+                        await batch.commit();
                     }
                     editingId = null;
                     if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
@@ -334,14 +355,12 @@ function initRichEditorInstance() {
         console.log("✅ 리치 에디터 인스턴스 연결 성공!");
 
         // 🚪 [에디터 내부 나가기 버튼 동적 생성 주입]
-        // rich-editor.js 연동 이후 UI가 완성되는 시점에 '나가기' 컴포넌트 버튼을 강제 렌더링합니다.
         const editorView = document.getElementById('assessment-tab-editor-view') || document.getElementById('tab-editor-view');
         if (editorView && !document.getElementById('assessment-custom-exit-btn')) {
             const exitBtn = document.createElement('button');
             exitBtn.id = 'assessment-custom-exit-btn';
             exitBtn.type = 'button';
             exitBtn.innerText = '나가기';
-            // 기존 테마에 어우러지는 모던 그레이 스타일 지정
             exitBtn.style.cssText = 'padding: 6px 14px; font-size: 13px; background: #718096; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-left: 10px; vertical-align: middle; transition: background 0.2s;';
             
             exitBtn.addEventListener('mouseover', () => exitBtn.style.background = '#4a5568');
@@ -354,7 +373,6 @@ function initRichEditorInstance() {
                 }
             });
 
-            // 학년 셀렉트 박스 옆에 나란히 배치하거나, 부재 시 에디터 컨테이너 상단에 삽입
             const gradeSelect = document.getElementById('assessment-editor-grade-select') || document.getElementById('editor-grade-select');
             if (gradeSelect && gradeSelect.parentNode) {
                 gradeSelect.parentNode.appendChild(exitBtn);
@@ -399,15 +417,41 @@ function switchToEditorView() {
     }
 }
 
+// 📡 실시간 메타 동기화 (가벼운 참조 정보만 구독하여 트래픽 대폭 최소화)
 function startSnapshotSync() {
     console.log("📡 [Assessment Debug] Firestore 실시간 동기화 스냅샷 시작");
     if (unsubscribeAssessments) unsubscribeAssessments();
     
     unsubscribeAssessments = onSnapshot(collection(db, 'assessments'), (snapshot) => {
         console.log(`📥 Firestore에서 ${snapshot.size}개의 문서 수신함`);
+        
+        // 스냅샷 갱신 시 이미 열어서 확보해 둔 본문 정보 상태의 누수를 전면 차단하기 위해 이전 버퍼 추적 결합
+        const oldSubjects = [...subjects];
         subjects = [];
+        
         snapshot.forEach((doc) => {
-            subjects.push({ id: doc.id, ...doc.data() });
+            const data = doc.data();
+            const preLoadedItem = oldSubjects.find(s => s.id === doc.id);
+            
+            if (preLoadedItem && preLoadedItem.isContentLoaded) {
+                // 이미 화면상에서 가져와 로딩된 내역이 존재한다면 캐싱 데이터 보존 연동
+                subjects.push({
+                    id: doc.id,
+                    ...data,
+                    isContentLoaded: true,
+                    content: preLoadedItem.content,
+                    files: preLoadedItem.files
+                });
+            } else {
+                // 최초 데이터 진입 시에는 무거운 본문을 빈 공간으로 마킹
+                subjects.push({ 
+                    id: doc.id, 
+                    ...data,
+                    isContentLoaded: false,
+                    content: '',
+                    files: []
+                });
+            }
         });
         
         subjects.forEach(sub => {
@@ -519,7 +563,7 @@ function renderList() {
                         const internalSecretTag = sub.isPublic === false ? '<span class="badge badge-private" style="margin-left:5px;">원격비공개</span>' : '';
                         
                         let filesHtml = '';
-                        if (sub.files && sub.files.length > 0) {
+                        if (sub.isContentLoaded && sub.files && sub.files.length > 0) {
                             filesHtml = `<div style="margin-top:14px; padding:10px; background:#f0f4f9; border-radius:6px;"><span style="font-size:12px; font-weight:bold; color:#1a73e8;">📎 첨부파일</span><ul style="margin:5px 0 0 0; padding-left:15px; list-style-type:none;">`;
                             sub.files.forEach(f => { filesHtml += `<li style="margin-bottom:2px;"><a href="${f.url}" target="_blank" style="font-size:13px; color:#1a73e8; text-decoration:none; font-weight:500;">${f.name}</a></li>`; });
                             filesHtml += `</ul></div>`;
@@ -538,7 +582,7 @@ function renderList() {
                                     </div>
                                 </div>
                                 <div class="assessment-item-body item-body-${sub.id} ql-editor">
-                                    <div>${sub.content || '본문 기재 내용이 없습니다.'}</div>
+                                    <div>${sub.isContentLoaded ? (sub.content || '본문 기재 내용이 없습니다.') : ''}</div>
                                     ${filesHtml}
                                 </div>
                             </div>
@@ -624,21 +668,72 @@ window.onTreeMasterNodeToggle = function(gradeKey, isChecked) {
     }
 };
 
-window.toggleItemAccordion = function(docId) {
+// 👑 [핵심 지연 로드 토글 구현] 사용자가 개별 항목 아코디언을 딱 열 때만 ID 기반 온디맨드 데이터 획득
+window.toggleItemAccordion = async function(docId) {
     const bodyTarget = document.querySelector(`.item-body-${docId}`);
     const arrowTarget = document.querySelector(`.item-arrow-${docId}`);
-    if (bodyTarget) {
-        const isCurrentActive = bodyTarget.classList.toggle('active');
-        if (arrowTarget) arrowTarget.innerText = isCurrentActive ? '▼' : '▶';
+    if (!bodyTarget) return;
+
+    const isCurrentActive = bodyTarget.classList.toggle('active');
+    if (arrowTarget) arrowTarget.innerText = isCurrentActive ? '▼' : '▶';
+
+    // 토글을 열었을 때이며 + 아직 해당 원본 데이터를 서버에서 땡겨온 적이 없는 최초 1회만 처리
+    if (isCurrentActive) {
+        const metaObj = subjects.find(sub => sub.id === docId);
+        if (metaObj && !metaObj.isContentLoaded) {
+            bodyTarget.innerHTML = `<div style="text-align: center; padding: 10px; color: #a0aec0; font-size:13px;">⏳ 내용을 안전하게 불러오는 중...</div>`;
+            
+            try {
+                // 가벼운 링크 문서에 각인되어 있는 고유 contentId 기반 알맹이 콕 집어 단독 조회
+                const contentDoc = await getDoc(doc(db, 'assessment_contents', metaObj.contentId));
+                
+                if (contentDoc.exists()) {
+                    const cData = contentDoc.data();
+                    metaObj.content = cData.content || '';
+                    metaObj.files = cData.files || [];
+                    metaObj.isContentLoaded = true; // 로드 완료 フラ그 마킹하여 연속 호출 제거
+
+                    // 레이아웃 전체 리빌드를 막고 해당 타겟 DOM 내부에만 내용과 첨부파일 실시간 안착
+                    let filesHtml = '';
+                    if (metaObj.files && metaObj.files.length > 0) {
+                        filesHtml = `<div style="margin-top:14px; padding:10px; background:#f0f4f9; border-radius:6px;"><span style="font-size:12px; font-weight:bold; color:#1a73e8;">📎 첨부파일</span><ul style="margin:5px 0 0 0; padding-left:15px; list-style-type:none;">`;
+                        metaObj.files.forEach(f => { filesHtml += `<li style="margin-bottom:2px;"><a href="${f.url}" target="_blank" style="font-size:13px; color:#1a73e8; text-decoration:none; font-weight:500;">${f.name}</a></li>`; });
+                        filesHtml += `</ul></div>`;
+                    }
+                    bodyTarget.innerHTML = `<div>${metaObj.content || '본문 기재 내용이 없습니다.'}</div>${filesHtml}`;
+                } else {
+                    bodyTarget.innerHTML = `<div style="color:#e53e3e;">⚠️ 원본 데이터 내용을 찾을 수 없습니다.</div>`;
+                }
+            } catch (err) {
+                console.error("항목 본문 로드 실패:", err);
+                bodyTarget.innerHTML = `<div style="color:#e53e3e;">❌ 데이터를 불러오지 못했습니다.</div>`;
+            }
+        }
     }
 };
 
-window.editAssessmentItem = function(docId) {
+// 📝 수정 요청 시에도 미로드 항목인 경우 원본 본문을 선제 확보하여 에디터에 안전하게 안착
+window.editAssessmentItem = async function(docId) {
     console.log(`📝 [Assessment Debug] 항목 수정 요청됨 ID: ${docId}`);
     const object = subjects.find(sub => sub.id === docId);
     if (!object) return;
 
     editingId = docId;
+    let targetContent = object.content;
+    let targetFiles = object.files;
+
+    // 만약 한 번도 아코디언을 열어보지 않고 곧바로 수정을 눌렀다면, 데이터 참조 ID 기반 본문 즉시 소싱
+    if (!object.isContentLoaded) {
+        try {
+            const contentDoc = await getDoc(doc(db, 'assessment_contents', object.contentId));
+            if (contentDoc.exists()) {
+                targetContent = contentDoc.data().content || '';
+                targetFiles = contentDoc.data().files || [];
+            }
+        } catch (e) {
+            console.error("🚨 수정 대상 본문 사전 로드 실패:", e);
+        }
+    }
     
     const gradeSelect = document.getElementById('assessment-editor-grade-select') || document.getElementById('editor-grade-select');
     const publicCheck = document.getElementById('assessment-editor-public-check') || document.getElementById('editor-public-check');
@@ -646,19 +741,37 @@ window.editAssessmentItem = function(docId) {
     if (publicCheck) publicCheck.checked = object.isPublic !== false;
 
     if (editorInstance && typeof editorInstance.setData === 'function') {
-        editorInstance.setData(object.title || '', object.content || '', object.files || []);
+        editorInstance.setData(object.title || '', targetContent || '', targetFiles || []);
     }
 
     switchToEditorView(); 
 };
 
+// 🗑️ 연동 일괄 제거 원칙 반영: 동일 고유 참조를 사용하는 항목 링크 및 본문 일괄 통합 원자적 파괴
 window.deleteAssessmentItem = async function(docId) {
-    if (!confirm("해당 교과 평가 계획을 영구히 삭제하시겠습니까?")) return;
+    const object = subjects.find(sub => sub.id === docId);
+    if (!object) return;
+
+    if (!confirm("해당 교과 평가 계획을 영구히 삭제하시겠습니까?\n(이 항목과 연동된 모든 학년의 계획 링크가 일괄 삭제됩니다.)")) return;
     try {
-        await deleteDoc(doc(db, 'assessments', docId));
-        console.log(`🗑️ Firestore 문서 삭제 완료: ${docId}`);
+        const batch = writeBatch(db);
+        const sharedContentId = object.contentId;
+
+        // 1. 공통 무거운 본문 데이터 컬렉션 원본 제거
+        if (sharedContentId) {
+            batch.delete(doc(db, 'assessment_contents', sharedContentId));
+        }
+
+        // 2. 이 데이터 아이디(contentId) 링크를 공유하던 모든 학년별 참조 메타데이터 동시 일괄 파괴
+        const relatedMetas = subjects.filter(sub => sub.contentId === sharedContentId);
+        relatedMetas.forEach(meta => {
+            batch.delete(doc(db, 'assessments', meta.id));
+        });
+
+        await batch.commit();
+        console.log(`🗑️ 원본 ID ${sharedContentId} 및 연동 메타데이터 일괄 제거 완료`);
     } catch (err) {
-        console.error("Firestore 삭제 실패:", err);
+        console.error("Firestore 일괄 삭제 실패:", err);
     }
 };
 
