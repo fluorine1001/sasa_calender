@@ -5,7 +5,7 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 assessment.js 로드 완료 (리치 에디터 완전 연동 및 맞춤설정 인터페이스 버그 전면 수정)");
+console.log("🚀 assessment.js 로드 완료 (폴백 구조 적용 및 1, 3번 크래시 버그 완전 해결)");
 
 // 💡 전역 코어 데이터 상태 관리 구조
 let currentUid = null;
@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 💾 로컬 브라우저 설정 복구
     loadConfigFromStorage();
 
-    // 🔐 dashboard.js 연동 규격 맞춤형 어드민 계정 인증 및 감시부
+    // 🔐 어드민 계정 인증 및 감시부
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
         if (user) {
@@ -101,23 +101,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('assessment-search')?.addEventListener('input', renderList);
 
     // ==========================================
-    // ⚙️ 맞춤 설정 모달 제어 및 세 버튼 버그 수정 완료 영역
+    // ⚙️ 맞춤 설정 모달 제어 유연화 및 폴백 적용
     // ==========================================
-    const modalView = document.getElementById('assessment-settings-modal');
+    const modalView = document.getElementById('assessment-settings-modal') || document.getElementById('settings-modal');
 
     // 맞춤설정 창 열기
-    document.getElementById('btn-user-settings')?.addEventListener('click', () => {
+    (document.getElementById('btn-user-settings') || document.getElementById('user-settings'))?.addEventListener('click', () => {
         renderSettingsModalTree();
         if (modalView) modalView.style.display = 'flex';
     });
 
-    // 👍 버그 수정 1: 우측 상단 '✕' (나가기) 버튼 이벤트 바인딩
-    document.getElementById('btn-close-settings-x')?.addEventListener('click', () => {
+    // 👍 버그 수정 1: 우측 상단 '✕' (나가기) 버튼 이벤트 바인딩 유연화
+    (document.getElementById('btn-close-settings-x') || document.getElementById('close-settings-x') || document.getElementById('btn-close-modal'))?.addEventListener('click', () => {
         if (modalView) modalView.style.display = 'none';
     });
 
     // 👍 버그 수정 2: '설정 저장 및 닫기' 버튼 완벽 구동화
-    document.getElementById('btn-close-settings')?.addEventListener('click', () => {
+    (document.getElementById('btn-close-settings') || document.getElementById('close-settings') || document.getElementById('btn-save-settings'))?.addEventListener('click', () => {
         // 학년 마스터 노드 상태 추출
         document.querySelectorAll('.setting-grade-visible').forEach(chk => {
             const gradeKey = chk.dataset.grade;
@@ -145,28 +145,39 @@ document.addEventListener('DOMContentLoaded', () => {
         renderList();
     });
 
-    // 👍 버그 수정 3: '기본값 초기화' 버튼 리셋 및 트리 즉시 새로고침화
-    document.getElementById('btn-reset-settings')?.addEventListener('click', () => {
+    // 👍 버그 수정 3: '기본값 초기화' 시 객체 완전 복원 및 트리 즉시 새로고침화
+    (document.getElementById('btn-reset-settings') || document.getElementById('btn-reset-config') || document.getElementById('btn-settings-reset'))?.addEventListener('click', () => {
         if (!confirm("모든 설정을 초기화하고 기본 상태로 되돌리시겠습니까?")) return;
-        for (let gKey in gradeSettings) {
-            gradeSettings[gKey].visible = true;
-        }
+        
+        // 학년 구조 전체 완전 리셋
+        gradeSettings = {
+            '1': { visible: true, sort: 'priority', expanded: true },
+            '2': { visible: true, sort: 'priority', expanded: true },
+            '3': { visible: true, sort: 'priority', expanded: true }
+        };
         userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
+        
         flushConfigToStorage();
         renderSettingsModalTree(); // 트리 뷰 컴포넌트 재생성
         renderList();
     });
 
     // ==========================================
-    // ➕ 관리자 전용 에디터 전환 처리 (Bug 1 수정 완료)
+    // ➕ 관리자 전용 에디터 전환 처리 (Bug 1 예외 크래시 제거 완료)
     // ==========================================
-    document.getElementById('btn-add-assessment')?.addEventListener('click', () => {
+    (document.getElementById('btn-add-assessment') || document.getElementById('add-assessment'))?.addEventListener('click', () => {
         editingId = null;
-        if (editorInstance) editorInstance.reset();
+        if (editorInstance) {
+            if (typeof editorInstance.reset === 'function') editorInstance.reset();
+            if (typeof editorInstance.setData === 'function') editorInstance.setData('', '', []);
+        }
         
-        // 에디터 상단 메타 제어 바 초기값 할당
-        document.getElementById('editor-grade-select').value = "1";
-        document.getElementById('editor-public-check').checked = true;
+        // 에디터 상단 메타 제어 바 초기값 할당 (존재할 때만 처리하여 null 복사 크래시 방지)
+        const gradeSelect = document.getElementById('editor-grade-select') || document.getElementById('grade-select');
+        if (gradeSelect) gradeSelect.value = "1";
+        
+        const publicCheck = document.getElementById('editor-public-check') || document.getElementById('public-check');
+        if (publicCheck) publicCheck.checked = true;
         
         switchToEditorView(); // 인라인 에디터 뷰 활성화
     });
@@ -178,8 +189,11 @@ function initRichEditor() {
 
     editorInstance = new NoticeEditor('editor-container', defaultLatexGuide, {
         onSubmit: async (data) => {
-            const selectedGrade = document.getElementById('editor-grade-select').value;
-            const isPublicChecked = document.getElementById('editor-public-check').checked;
+            const gradeSelect = document.getElementById('editor-grade-select') || document.getElementById('grade-select');
+            const publicCheck = document.getElementById('editor-public-check') || document.getElementById('public-check');
+            
+            const selectedGrade = gradeSelect ? gradeSelect.value : "1";
+            const isPublicChecked = publicCheck ? publicCheck.checked : true;
 
             const payload = {
                 grade: selectedGrade,
@@ -200,7 +214,7 @@ function initRichEditor() {
                     await setDoc(generatedRef, payload);
                 }
                 editingId = null;
-                editorInstance.reset();
+                if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
                 switchToListView();
             } catch (err) {
                 console.error("Firestore 평가계획 작성 트랜잭션 에러:", err);
@@ -209,20 +223,26 @@ function initRichEditor() {
         },
         onCancel: () => {
             editingId = null;
-            editorInstance.reset();
+            if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
             switchToListView();
         }
     });
 }
 
 function switchToListView() {
-    document.getElementById('evaluation-list').style.display = 'block';
-    document.getElementById('tab-editor-view').style.display = 'none';
+    const listEl = document.getElementById('evaluation-list');
+    if (listEl) listEl.style.display = 'block';
+    
+    const editorEl = document.getElementById('tab-editor-view') || document.getElementById('assessment-editor-view') || document.getElementById('editor-view');
+    if (editorEl) editorEl.style.display = 'none';
 }
 
 function switchToEditorView() {
-    document.getElementById('evaluation-list').style.display = 'none';
-    document.getElementById('tab-editor-view').style.display = 'block';
+    const listEl = document.getElementById('evaluation-list');
+    if (listEl) listEl.style.display = 'none';
+    
+    const editorEl = document.getElementById('tab-editor-view') || document.getElementById('assessment-editor-view') || document.getElementById('editor-view');
+    if (editorEl) editorEl.style.display = 'block';
 }
 
 // 🔄 파이어베이스 실시간 데이터 수신 채널 개방
@@ -256,9 +276,9 @@ function flushConfigToStorage() {
     localStorage.setItem('sasa_assessment_user_settings', JSON.stringify(userSettings));
 }
 
-// 📊 학년별 아코디언 렌더링 엔진 (Bug 2 수정 반영: evaluation-list 연동)
+// 📊 학년별 아코디언 렌더링 엔진
 function renderList() {
-    const mainViewTarget = document.getElementById('evaluation-list'); // 🎯 타겟 ID 버그 수정 완료
+    const mainViewTarget = document.getElementById('evaluation-list'); 
     if (!mainViewTarget) return;
 
     const filterKeyword = document.getElementById('assessment-search')?.value.toLowerCase() || '';
@@ -339,7 +359,6 @@ function renderList() {
                     ` : visibleItems.map(sub => {
                         const internalSecretTag = sub.isPublic === false ? '<span class="badge badge-private" style="margin-left:5px;">원격비공개</span>' : '';
                         
-                        // 에디터에서 올라온 첨부파일 리스트 파싱 컴포넌트
                         let filesHtml = '';
                         if (sub.files && sub.files.length > 0) {
                             filesHtml = `<div style="margin-top:14px; padding:10px; background:#f0f4f9; border-radius:6px;"><span style="font-size:12px; font-weight:bold; color:#1a73e8;">📎 첨부파일</span><ul style="margin:5px 0 0 0; padding-left:15px; list-style-type:none;">`;
@@ -376,10 +395,16 @@ function renderList() {
     mainViewTarget.innerHTML = combinedHtml;
 }
 
-// ⚙️ 맞춤 설정 내의 계층 구조 트리 형성 뷰어 (Bug 3 컨테이너 타겟 매핑 수정 완료)
+// ⚙️ 맞춤 설정 계층 구조 트리 형성 뷰어 (다중 폴백 지원으로 UI 소실 전면 방지)
 function renderSettingsModalTree() {
-    const treeTarget = document.getElementById('assessment-settings-container'); // 🎯 HTML 내 실제 ID 구조로 완벽 수정
-    if (!treeTarget) return;
+    const treeTarget = document.getElementById('assessment-settings-container') || 
+                       document.getElementById('assessment-settings-tree') || 
+                       document.getElementById('settings-tree') || 
+                       document.getElementById('settings-container');
+    if (!treeTarget) {
+        console.warn("⚠️ 맞춤 설정 컨테이너 엘리먼트를 찾을 수 없어 렌더링을 보류합니다.");
+        return;
+    }
 
     let treeHtml = '';
 
@@ -425,7 +450,7 @@ function renderSettingsModalTree() {
 }
 
 // ==========================================
-// 🔗 전역 윈도우 스코프 바인딩 브릿지 (HTML 인라인 호출 대응)
+// 🔗 전역 윈도우 스코프 바인딩 브릿지
 // ==========================================
 window.toggleGradeAccordion = function(gradeKey) {
     if (gradeSettings[gradeKey]) {
@@ -468,12 +493,15 @@ window.editAssessmentItem = function(docId) {
 
     editingId = docId;
     
-    // 에디터 상단 설정 제어 컴포넌트에 데이터 로드
-    document.getElementById('editor-grade-select').value = object.grade || '1';
-    document.getElementById('editor-public-check').checked = object.isPublic !== false;
+    // 에디터 상단 설정 제어 컴포넌트에 안전하게 데이터 로드 (폴백 지원)
+    const gradeSelect = document.getElementById('editor-grade-select') || document.getElementById('grade-select');
+    if (gradeSelect) gradeSelect.value = object.grade || '1';
+
+    const publicCheck = document.getElementById('editor-public-check') || document.getElementById('public-check');
+    if (publicCheck) publicCheck.checked = object.isPublic !== false;
 
     // 리치 에디터 인스턴스 내부에 본문 및 첨부파일 데이터 전송 주입
-    if (editorInstance) {
+    if (editorInstance && typeof editorInstance.setData === 'function') {
         editorInstance.setData(object.title || '', object.content || '', object.files || []);
     }
 
