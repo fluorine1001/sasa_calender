@@ -5,9 +5,8 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 assessment.js 로드 완료 (버튼 클릭 무반응 및 UI 증발 버그 완벽 수정)");
+console.log("🚀 assessment.js 로드 완료 (버튼 기능 정상화 및 학년 지정 패치 적용)");
 
-// 💡 전역 코어 데이터 상태 관리 구조
 let currentUid = null;
 let isCurrentUserAdmin = false;
 let unsubscribeAssessments = null;
@@ -17,7 +16,6 @@ let editingId = null;
 let subjects = []; 
 let userSettings = []; 
 
-// 🌟 학년별 독립 제어 정보 기본 객체
 let gradeSettings = {
     '1': { visible: true, sort: 'priority', expanded: true },
     '2': { visible: true, sort: 'priority', expanded: true },
@@ -29,7 +27,7 @@ const defaultLatexGuide = [
 ];
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 🎨 아코디언 컴포넌트 전용 CSS
+    // CSS 인젝션
     if (!document.getElementById('accordion-custom-styles')) {
         const style = document.createElement('style');
         style.id = 'accordion-custom-styles';
@@ -66,7 +64,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadConfigFromStorage();
 
-    // 🔐 어드민 계정 인증부
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
         if (user) {
@@ -79,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (isCurrentUserAdmin) {
-                // 권한 확인 완료 시 '새 계획 추가' 버튼 노출 및 에디터 초기화
                 document.querySelectorAll('#btn-admin-add, .admin-only').forEach(el => el.style.setProperty('display', 'inline-block', 'important'));
                 initRichEditorInstance(); 
             } else {
@@ -94,28 +90,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 🔍 실시간 검색창 (ID 매칭 확인: search-input)
     document.getElementById('search-input')?.addEventListener('input', renderList);
 
     // ==========================================
-    // ⚙️ 맞춤 설정 모달창 버튼 이벤트 (원인 3 해결)
+    // ⚙️ 맞춤 설정 모달창 버튼 이벤트 완벽 제어
     // ==========================================
-    const modalView = document.getElementById('assessment-settings-modal');
+    const getModalView = () => document.getElementById('assessment-settings-modal');
 
-    // 1. 설정 창 열기 (ID 매칭 완료: btn-user-settings)
+    // 1. 설정 창 열기
     document.getElementById('btn-user-settings')?.addEventListener('click', () => {
         renderSettingsModalTree();
-        if (modalView) modalView.style.display = 'flex';
+        const modal = getModalView();
+        if (modal) modal.style.display = 'flex';
     });
 
-    // 2. 나가기 버튼 (ID 매칭 완료: btn-cancel-settings)
-    document.getElementById('btn-cancel-settings')?.addEventListener('click', () => {
-        if (modalView) modalView.style.display = 'none';
-    });
-
-    // 상단 X 버튼 
-    document.getElementById('btn-close-settings-x')?.addEventListener('click', () => {
-        if (modalView) modalView.style.display = 'none';
+    // 2. 상단 X 버튼으로 창 닫기 (하단 나가기 버튼은 삭제됨)
+    // 클래스나 ID에 구애받지 않도록 모달 내부의 X 버튼들을 모두 탐색하여 닫기 이벤트를 겁니다.
+    document.querySelectorAll('#assessment-settings-modal button').forEach(btn => {
+        if (btn.innerText.includes('✕') || btn.id === 'btn-close-settings-x') {
+            btn.addEventListener('click', () => {
+                const modal = getModalView();
+                if (modal) modal.style.display = 'none';
+            });
+        }
     });
 
     // 3. 설정 저장 및 닫기 버튼
@@ -141,8 +138,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         flushConfigToStorage();
-        if (modalView) modalView.style.display = 'none';
         renderList();
+        
+        const modal = getModalView();
+        if (modal) modal.style.display = 'none';
+        
+        alert("✅ 맞춤 설정이 성공적으로 저장되었습니다.");
     });
 
     // 4. 기본값 초기화 버튼
@@ -154,42 +155,47 @@ document.addEventListener('DOMContentLoaded', () => {
             '3': { visible: true, sort: 'priority', expanded: true }
         };
         userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
+        
         flushConfigToStorage();
-        renderSettingsModalTree(); // 초기화 후 화면 다시 그리기
+        renderSettingsModalTree(); // 초기화 즉시 화면 리렌더링
         renderList();
+        
+        alert("🔄 설정이 기본값으로 초기화되었습니다. (저장 및 닫기 버튼을 눌러 완료해주세요)");
     });
 
     // ==========================================
-    // ➕ "새 계획 추가" 버튼 클릭 이벤트 (원인 1 해결)
+    // ➕ "새 계획 추가" 버튼 클릭 시 학년 선택 기능
     // ==========================================
-    // 기존의 잘못된 'btn-add-assessment' 대신 'btn-admin-add' ID 사용
     document.getElementById('btn-admin-add')?.addEventListener('click', () => {
         editingId = null;
         if (editorInstance && typeof editorInstance.reset === 'function') {
             editorInstance.reset();
         }
         
+        // 에디터 진입 시 대상 학년을 기본값(1학년)으로 리셋해둡니다.
         const gradeSelect = document.getElementById('editor-grade-select');
         const publicCheck = document.getElementById('editor-public-check');
         if (gradeSelect) gradeSelect.value = "1";
         if (publicCheck) publicCheck.checked = true;
         
-        switchToEditorView(); // 에디터 뷰로 전환
+        switchToEditorView(); 
     });
 });
 
-// 🛠️ 리치 에디터 라이브러리 연동부
+// 🛠️ 리치 에디터 라이브러리 연동부 (학년 지정 저장 로직 포함)
 function initRichEditorInstance() {
     if (editorInstance || !document.getElementById('editor-container')) return;
 
     editorInstance = new NoticeEditor('editor-container', defaultLatexGuide, {
         onSubmit: async (data) => {
+            // 사용자가 선택한 학년 정보를 가져옵니다 (1학년/2학년/3학년)
             const gradeSelect = document.getElementById('editor-grade-select');
             const publicCheck = document.getElementById('editor-public-check');
             
             const selectedGrade = gradeSelect ? gradeSelect.value : "1";
             const isPublicChecked = publicCheck ? publicCheck.checked : true;
 
+            // 저장할 데이터 포맷 (grade 속성에 선택한 학년이 반영됨)
             const payload = {
                 grade: selectedGrade,
                 title: data.title,
@@ -211,6 +217,7 @@ function initRichEditorInstance() {
                 editingId = null;
                 if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
                 switchToListView();
+                alert(`✅ 성공적으로 저장되어 ${selectedGrade}학년 탭에 등록되었습니다.`);
             } catch (err) {
                 console.error("Firestore 트랜잭션 에러:", err);
                 alert("❌ 저장 도중 문제가 발생했습니다.");
@@ -224,7 +231,6 @@ function initRichEditorInstance() {
     });
 }
 
-// 🔄 화면 전환 함수 수정 (원인 4 해결: tab-list-view 전체 토글)
 function switchToListView() {
     document.getElementById('tab-list-view').style.display = 'block';
     document.getElementById('tab-editor-view').style.display = 'none';
@@ -381,13 +387,10 @@ function renderList() {
     mainViewTarget.innerHTML = combinedHtml;
 }
 
-// ⚙️ 맞춤 설정 계층 구조 렌더링 (원인 2 해결: settings-grade-hierarchy-container 매칭 완료)
+// ⚙️ 맞춤 설정 계층 구조 렌더링
 function renderSettingsModalTree() {
     const treeTarget = document.getElementById('settings-grade-hierarchy-container');
-    if (!treeTarget) {
-        console.error("설정 모달 컨테이너를 찾을 수 없습니다.");
-        return;
-    }
+    if (!treeTarget) return;
 
     let treeHtml = '';
     ['1', '2', '3'].forEach(gradeKey => {
@@ -473,6 +476,7 @@ window.editAssessmentItem = function(docId) {
 
     editingId = docId;
     
+    // 수정 시에도 기존에 지정했던 학년이 그대로 셀렉트 박스에 반영됩니다.
     const gradeSelect = document.getElementById('editor-grade-select');
     const publicCheck = document.getElementById('editor-public-check');
     if (gradeSelect) gradeSelect.value = object.grade || '1';
@@ -482,7 +486,7 @@ window.editAssessmentItem = function(docId) {
         editorInstance.setData(object.title || '', object.content || '', object.files || []);
     }
 
-    switchToEditorView(); // 에디터 폼 영역 노출
+    switchToEditorView(); 
 };
 
 window.deleteAssessmentItem = async function(docId) {
