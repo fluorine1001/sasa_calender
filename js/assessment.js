@@ -156,6 +156,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // 💡 [핵심 추가 사항] 에디터 객체 생성 직후, 내부에 숨겨진 취소 버튼을 찾아 화면에 보이도록 활성화합니다.
+    const cancelBtn = document.querySelector('#editor-container .btn-cancel-edit');
+    if (cancelBtn) {
+        cancelBtn.style.display = 'inline-block'; // 숨김 해제
+        cancelBtn.innerText = '나가기 (취소)';       // 버튼 텍스트 변경
+    }
+
     function toggleEditorTab(showEditor) {
         if (showEditor) {
             tabAssessment.style.display = 'none';
