@@ -89,8 +89,8 @@ export class NoticeEditor {
     renderUI() {
         this.container.style.cssText = "padding: 15px; margin-bottom: 20px; background: #fdfdfd; border: 1px dashed #1a73e8; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;";
         this.container.innerHTML = `
-            <div style="font-weight:bold; color:#1a73e8; font-size:14px; margin-bottom:5px;" id="admin-form-title">📝 새 공지사항 작성</div>
-            <input type="text" id="new-notice-title" placeholder="공지사항 제목" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+            <div style="font-weight:bold; color:#1a73e8; font-size:14px; margin-bottom:5px;" id="admin-form-title">📝 새 글 작성</div>
+            <input type="text" id="new-notice-title" placeholder="제목" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
             
             <div id="editor-wrapper" style="background:#fff; border-radius:4px;">
                 <div id="new-notice-editor" style="height: 250px; font-size: 14px;"></div>
@@ -111,7 +111,7 @@ export class NoticeEditor {
                 <button type="button" id="btn-add-link-row" style="background:none; border:1px solid #5f6368; color:#5f6368; border-radius:4px; padding:6px 12px; font-size:12px; cursor:pointer;">+ 링크 입력칸 추가</button>
                 <div style="display:flex; gap:10px;">
                     <button type="button" id="btn-cancel-edit" style="display:none; background:#f1f3f4; color:#333; border:none; border-radius:4px; padding: 8px 16px; cursor:pointer;">수정 취소</button>
-                    <button id="btn-submit-notice" class="cl-btn-primary" style="padding: 8px 16px; cursor:pointer; background:#1a73e8; color:white; border:none; border-radius:4px;">공지 등록</button>
+                    <button id="btn-submit-notice" class="cl-btn-primary" style="padding: 8px 16px; cursor:pointer; background:#1a73e8; color:white; border:none; border-radius:4px;">저장하기</button>
                 </div>
             </div>
         `;
@@ -142,7 +142,6 @@ export class NoticeEditor {
         toolbar.addHandler('video', () => { this.openMediaModal('upload', 'video'); });
     }
 
-    // 📌 [버그 수정] 다중 인스턴스 충돌 방지를 위해 모달을 열 때마다 이벤트를 현재 객체(this)에 동기화
     bindModalEvents() {
         document.getElementById('tab-btn-file').onclick = () => this.switchTab('file');
         document.getElementById('tab-btn-url').onclick = () => this.switchTab('url');
@@ -234,7 +233,6 @@ export class NoticeEditor {
         this.modalState.targetNode = targetNode;
         this.modalState.file = null;
 
-        // 모달 열 때마다 현재 인스턴스에 맞게 이벤트 동기화 (업로드 버튼 먹통 버그 해결)
         this.bindModalEvents();
 
         const modal = document.getElementById('quill-media-modal');
@@ -319,7 +317,7 @@ export class NoticeEditor {
     initEvents() {
         const contextMenu = document.getElementById('quill-media-context-menu');
 
-        // 🖱️ 우클릭 트리거 바인딩
+        // 🖱️ 우클릭 크기 조절 메뉴 바인딩
         const editorContent = this.container.querySelector('.ql-editor');
         editorContent.addEventListener('contextmenu', (e) => {
             if (['IMG', 'IFRAME', 'VIDEO'].includes(e.target.tagName)) {
@@ -345,49 +343,63 @@ export class NoticeEditor {
             if (!e.target.closest('#quill-media-context-menu')) contextMenu.style.display = 'none';
         });
 
-        // 💡 [새 기능] 복사+붙여넣기(Ctrl+V) 시 Base64 차단 및 자동 서버 업로드 처리 (1MB 에러 완벽 해결!)
+        // 💡 [핵심 기능] 복사+붙여넣기(Ctrl+V) 시 Base64를 차단하고 Cloudinary 서버로 자동 업로드
         this.quill.root.addEventListener('paste', async (e) => {
             const clipboardData = e.clipboardData || window.clipboardData;
             if (!clipboardData || !clipboardData.items) return;
 
+            // 클립보드에 이미지가 있는지 먼저 확인
+            let hasImage = false;
             for (let i = 0; i < clipboardData.items.length; i++) {
-                const item = clipboardData.items[i];
-                if (item.type.indexOf('image') !== -1) {
-                    e.preventDefault(); // 기본 붙여넣기(Base64 폭탄)를 강제로 막습니다.
-                    
-                    const file = item.getAsFile();
-                    if (!file) continue;
+                if (clipboardData.items[i].type.indexOf('image') !== -1) {
+                    hasImage = true;
+                    break;
+                }
+            }
 
-                    const range = this.quill.getSelection(true) || { index: this.quill.getLength() };
-                    const placeholder = '[이미지 업로드 중...⏳]';
-                    this.quill.insertText(range.index, placeholder);
+            if (hasImage) {
+                e.preventDefault(); // 기본 붙여넣기 동작(Base64 폭탄 삽입)을 완벽 차단!
 
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('upload_preset', this.uploadPreset);
+                for (let i = 0; i < clipboardData.items.length; i++) {
+                    const item = clipboardData.items[i];
+                    if (item.type.indexOf('image') !== -1) {
+                        const file = item.getAsFile();
+                        if (!file) continue;
 
-                    try {
-                        const response = await fetch(this.cloudinaryUrl, { method: 'POST', body: formData });
-                        const result = await response.json();
+                        // 로딩 텍스트를 먼저 띄워 피드백 제공
+                        const range = this.quill.getSelection(true) || { index: this.quill.getLength() };
+                        const placeholder = '[이미지 업로드 중...⏳]';
+                        this.quill.insertText(range.index, placeholder);
 
-                        this.quill.deleteText(range.index, placeholder.length);
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        formData.append('upload_preset', this.uploadPreset);
 
-                        if (result.secure_url) {
-                            this.modalState.type = 'image'; 
-                            this.insertIntoQuill(result.secure_url, 'auto', 'auto', range.index);
-                        } else {
-                            throw new Error('업로드 거부');
+                        try {
+                            const response = await fetch(this.cloudinaryUrl, { method: 'POST', body: formData });
+                            const result = await response.json();
+
+                            // 로딩 텍스트 지우기
+                            this.quill.deleteText(range.index, placeholder.length);
+
+                            if (result.secure_url) {
+                                this.modalState.type = 'image'; 
+                                // Cloudinary의 짧은 URL을 일반 이미지처럼 삽입하여 크기 조절이 가능하게 만듦
+                                this.insertIntoQuill(result.secure_url, 'auto', 'auto', range.index);
+                            } else {
+                                throw new Error('업로드 거부');
+                            }
+                        } catch (error) {
+                            console.error("Paste upload error:", error);
+                            this.quill.deleteText(range.index, placeholder.length);
+                            alert("붙여넣은 이미지 서버 업로드에 실패했습니다.");
                         }
-                    } catch (error) {
-                        console.error("Paste upload error:", error);
-                        this.quill.deleteText(range.index, placeholder.length);
-                        alert("붙여넣은 이미지 업로드에 실패했습니다.");
                     }
                 }
             }
         });
 
-        // 제출 및 UI 이벤트
+        // 폼 등록 및 취소 버튼 등 일반 UI 이벤트
         this.container.querySelector('#btn-add-link-row').addEventListener('click', () => this.addLinkRow());
         this.container.querySelector('#link-inputs-container').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-remove-link-row')) e.target.closest('.link-input-row').remove();
@@ -399,7 +411,8 @@ export class NoticeEditor {
         this.container.querySelector('#btn-submit-notice').addEventListener('click', async (e) => {
             const title = this.container.querySelector('#new-notice-title').value.trim();
             const bodyHtml = this.quill ? this.quill.root.innerHTML : '';
-            if (!title) return alert("공지사항 제목을 입력해주세요.");
+            if (!title) return alert("제목을 입력해주세요.");
+            
             const fileRows = this.container.querySelectorAll('.link-input-row');
             let filesArray = [];
             fileRows.forEach(row => {
@@ -407,6 +420,7 @@ export class NoticeEditor {
                 const url = row.querySelector('.new-notice-file-url').value.trim();
                 if (url) filesArray.push({ name: name || '첨부 링크 열기', url: url });
             });
+            
             e.target.innerText = "저장 중...";
             e.target.disabled = true;
             try {
@@ -416,7 +430,7 @@ export class NoticeEditor {
                 console.error(err);
                 alert("저장 중 오류가 발생했습니다.");
             } finally {
-                e.target.innerText = "공지 등록";
+                e.target.innerText = "저장하기";
                 e.target.disabled = false;
             }
         });
