@@ -358,3 +358,22 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
         min-width: 0 !important;   /* 화면 밖으로 밀려나는 것을 완벽히 차단 */
     }
 }
+
+/* ========================================================
+   ✨ [수정] 모달 창 400px 고정 너비 해제 (모바일 우측 잘림 완벽 해결)
+======================================================== */
+@media (max-width: 768px) {
+    /* 1. 인라인으로 적용된 width: 400px 강제 무력화 및 좌우 안전 여백 확보 */
+    .modal-content {
+        width: 90% !important;        /* 화면의 90%만 차지하도록 유연하게 변경 */
+        max-width: 400px !important;  /* 아무리 커져도 400px은 넘지 않도록 제한 */
+        box-sizing: border-box !important;
+        margin: 0 auto !important;    /* 화면 가운데 정렬 */
+    }
+
+    /* 2. 모바일 화면에서는 모달 내부 여백을 살짝 줄여서 공간 확보 */
+    .modal-content form,
+    #sasa-credential-form {
+        padding: 16px !important;
+    }
+}
