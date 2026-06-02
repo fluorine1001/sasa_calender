@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
-console.log("🚀 assessment.js 로드 완료 (학년별 독립형 탭, 종속형 비공개 트리 및 개별 정렬 알고리즘 탑재)");
+console.log("🚀 assessment.js 로드 완료 (버튼 미작동 오류 및 ID 매칭 완벽 해결)");
 
 // 💡 전역 코어 데이터 상태 관리 구조
 let currentUid = null;
@@ -14,7 +14,7 @@ let unsubscribeAssessments = null;
 let subjects = []; 
 let userSettings = []; // 개별 과목 메타 속성 캐시: [{id: 'docId', visible: true, priority: 1}]
 
-// 🌟 [요구사항 3, 4, 5] 학년별 독립 제어 정보 기본 객체
+// 🌟 학년별 독립 제어 정보 기본 객체
 let gradeSettings = {
     '1': { visible: true, sort: 'priority', expanded: true },
     '2': { visible: true, sort: 'priority', expanded: true },
@@ -22,8 +22,11 @@ let gradeSettings = {
 };
 let editingId = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-    // 🎨 [요구사항 7] 독자적인 세련된 확장형 아코디언 컴포넌트 전용 CSS 주입
+// 🔥 타이밍 버그 해결: 문서 로딩 상태에 상관없이 무조건 실행되도록 캡슐화
+function initAssessmentUI() {
+    console.log("✅ 평가 계획 UI 초기화 및 이벤트 바인딩 시작");
+
+    // 🎨 독자적인 아코디언 컴포넌트 전용 CSS 주입
     if (!document.getElementById('accordion-custom-styles')) {
         const style = document.createElement('style');
         style.id = 'accordion-custom-styles';
@@ -59,10 +62,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.head.appendChild(style);
     }
 
-    // 💾 유저 커스텀 세팅 복구
     loadConfigFromStorage();
 
-    // 🔐 인증 정보 연동 커널
+    // 🔐 인증 정보 연동 
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
         if (user) {
@@ -78,36 +80,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn("관리자 식별 로직 우회 처리:", e);
             }
             
+            // 관리자 전용 버튼 표시 제어
             if (isCurrentUserAdmin) {
-                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'inline-block');
+                document.querySelectorAll('.admin-only, #btn-admin-add').forEach(el => el.style.display = 'inline-block');
+            } else {
+                document.querySelectorAll('.admin-only, #btn-admin-add').forEach(el => el.style.display = 'none');
             }
             startSnapshotSync();
         } else {
             currentUid = null;
             isCurrentUserAdmin = false;
-            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.admin-only, #btn-admin-add').forEach(el => el.style.display = 'none');
             if (unsubscribeAssessments) unsubscribeAssessments();
         }
     });
 
-    // 🔍 실시간 인스턴트 검색 바 바인딩
-    document.getElementById('assessment-search')?.addEventListener('input', renderList);
+    // 🔍 실시간 검색 바 바인딩 (수정: search-input)
+    document.getElementById('search-input')?.addEventListener('input', renderList);
 
     // ⚙️ 개인 설정 판넬 컨트롤러
     const modalView = document.getElementById('assessment-settings-modal');
-    document.getElementById('btn-user-settings')?.addEventListener('click', () => {
-        renderSettingsModalTree();
-        if (modalView) modalView.style.display = 'flex';
-    });
+    const btnUserSettings = document.getElementById('btn-user-settings');
+    if (btnUserSettings) {
+        btnUserSettings.addEventListener('click', () => {
+            renderSettingsModalTree();
+            if (modalView) {
+                modalView.style.display = 'flex';
+            } else {
+                alert("설정 모달창을 찾을 수 없습니다. HTML 하단에 팝업 코드가 있는지 확인해주세요.");
+            }
+        });
+    }
 
     document.getElementById('btn-close-settings')?.addEventListener('click', () => {
-        // 학년 단위 마스터 데이터 바인딩 저장
         document.querySelectorAll('.setting-grade-visible').forEach(chk => {
             const gradeKey = chk.dataset.grade;
             if (gradeSettings[gradeKey]) gradeSettings[gradeKey].visible = chk.checked;
         });
 
-        // 서브 트리 항목 메타 데이터 추출 저장
         document.querySelectorAll('.settings-item').forEach(item => {
             const targetChk = item.querySelector('.setting-visible');
             const targetInput = item.querySelector('.setting-priority');
@@ -138,14 +148,21 @@ document.addEventListener('DOMContentLoaded', () => {
         renderList();
     });
 
-    // ➕ 관리자 기입 폼 동작 처리
+    // ➕ 관리자 기입 폼 동작 처리 (수정: btn-admin-add)
     const writeFormModal = document.getElementById('assessment-form-modal');
-    document.getElementById('btn-add-assessment')?.addEventListener('click', () => {
-        editingId = null;
-        document.getElementById('assessment-modal-title').innerText = '➕ 평가 계획 항목 추가';
-        document.getElementById('assessment-item-form').reset();
-        if (writeFormModal) writeFormModal.style.display = 'flex';
-    });
+    const btnAdminAdd = document.getElementById('btn-admin-add');
+    if (btnAdminAdd) {
+        btnAdminAdd.addEventListener('click', () => {
+            editingId = null;
+            document.getElementById('assessment-modal-title').innerText = '➕ 평가 계획 항목 추가';
+            document.getElementById('assessment-item-form').reset();
+            if (writeFormModal) {
+                writeFormModal.style.display = 'flex';
+            } else {
+                alert("추가 모달창을 찾을 수 없습니다. HTML 하단에 팝업 코드가 있는지 확인해주세요.");
+            }
+        });
+    }
 
     document.getElementById('btn-cancel-assessment-form')?.addEventListener('click', () => {
         if (writeFormModal) writeFormModal.style.display = 'none';
@@ -176,7 +193,14 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("❌ 학사 디바이스 데이터베이스 처리에 오류가 발생했습니다.");
         }
     });
-});
+}
+
+// 🔥 스크립트 실행 시점에 DOM이 이미 그려져 있다면 즉시 실행하고, 아니면 대기합니다 (타이밍 버그 완벽 해결)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAssessmentUI);
+} else {
+    initAssessmentUI();
+}
 
 // 🔄 파이어베이스 실시간 스트림 파이프라인 개방
 function startSnapshotSync() {
@@ -211,34 +235,30 @@ function flushConfigToStorage() {
     localStorage.setItem('sasa_assessment_user_settings', JSON.stringify(userSettings));
 }
 
-// 📊 [요구사항 1, 2, 3, 4, 5] 핵심 정렬 기법 및 렌더링 뷰엔진
+// 📊 핵심 정렬 기법 및 렌더링 뷰엔진 (수정: evaluation-list)
 function renderList() {
-    const mainViewTarget = document.getElementById('assessment-grade-containers');
+    const mainViewTarget = document.getElementById('evaluation-list');
     if (!mainViewTarget) return;
 
-    const filterKeyword = document.getElementById('assessment-search')?.value.toLowerCase() || '';
+    const filterKeyword = document.getElementById('search-input')?.value.toLowerCase() || '';
     let combinedHtml = '';
 
-    // [요구사항 1] 1, 2, 3학년별 탭 구조화 세분화 순회
     ['1', '2', '3'].forEach(gradeKey => {
         const currentGradeConf = gradeSettings[gradeKey] || { visible: true, sort: 'priority', expanded: true };
         
-        // 1차 필터링: 해당 학년 요소 추출
         let matchedItems = subjects.filter(sub => sub.grade === gradeKey);
 
         if (filterKeyword) {
             matchedItems = matchedItems.filter(sub => 
-                sub.title.toLowerCase().includes(filterKeyword) || 
-                sub.content.toLowerCase().includes(filterKeyword)
+                (sub.title && sub.title.toLowerCase().includes(filterKeyword)) || 
+                (sub.content && sub.content.toLowerCase().includes(filterKeyword))
             );
         }
 
-        // 권한 분기: 비공개 항목은 관리자가 아닌 이상 필터아웃
         if (!isCurrentUserAdmin) {
             matchedItems = matchedItems.filter(sub => sub.isPublic !== false);
         }
 
-        // 🌟 [요구사항 3] 계층 종속 필터 로직: 탭 자체가 꺼져있으면 하위 설정에 관계없이 일절 비표시
         const isGradeTabPublic = currentGradeConf.visible;
         let visibleItems = [];
         
@@ -249,26 +269,24 @@ function renderList() {
             });
         }
 
-        // 🌟 [요구사항 4 & 5] 각 탭 내부 격리 정렬 시스템 적용
         const activeSortStrategy = currentGradeConf.sort || 'priority';
         if (activeSortStrategy === 'priority') {
             visibleItems.sort((a, b) => {
                 const prioA = userSettings.find(s => s.id === a.id)?.priority || 1;
                 const prioB = userSettings.find(s => s.id === b.id)?.priority || 1;
-                if (prioA !== prioB) return prioA - prioB; // 우선순위 숫자 기준 오름차순
-                return a.title.localeCompare(b.title, 'ko');
+                if (prioA !== prioB) return prioA - prioB;
+                return (a.title || '').localeCompare(b.title || '', 'ko');
             });
         } else if (activeSortStrategy === 'alphabetical') {
-            visibleItems.sort((a, b) => a.title.localeCompare(b.title, 'ko'));
+            visibleItems.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ko'));
         } else if (activeSortStrategy === 'latest') {
             visibleItems.sort((a, b) => {
                 const ticksA = a.createdAt?.seconds || 0;
                 const ticksB = b.createdAt?.seconds || 0;
-                return ticksB - ticksA; // 등록 시간 내림차순
+                return ticksB - ticksA;
             });
         }
 
-        // [요구사항 2] 열고 닫히는 개별 상태 감지
         const isOpen = currentGradeConf.expanded !== false;
         const bodyToggleCss = isOpen ? 'block' : 'none';
         const caret = isOpen ? '▼' : '▶';
@@ -295,7 +313,7 @@ function renderList() {
                 <div class="grade-accordion-body grade-body-${gradeKey}" style="display: ${bodyToggleCss};">
                     ${visibleItems.length === 0 ? `
                         <div style="text-align: center; padding: 24px; color: #a0aec0; font-size: 13px;">
-                            ${isGradeTabPublic ? '조건에 일치하는 등록된 데이터가 없습니다.' : '⚠️ 현재 학년 전체 탭이 비공개 처리 상태입니다. 설정 메뉴를 확인하세요.'}
+                            ${isGradeTabPublic ? '조건에 일치하는 데이터가 없습니다.' : '⚠️ 현재 학년 전체 탭이 비공개 상태입니다.'}
                         </div>
                     ` : visibleItems.map(sub => {
                         const internalSecretTag = sub.isPublic === false ? '<span class="badge badge-private" style="margin-left:5px;">원격비공개</span>' : '';
@@ -327,7 +345,7 @@ function renderList() {
     mainViewTarget.innerHTML = combinedHtml;
 }
 
-// 🌟 [요구사항 3 & 4] 설정 영역 내의 학년별 트리 종속형 인터페이스 제어 뷰어
+// 🌟 설정 영역 내의 학년별 트리 종속형 인터페이스 제어
 function renderSettingsModalTree() {
     const treeTarget = document.getElementById('settings-grade-hierarchy-container');
     if (!treeTarget) return;
@@ -376,7 +394,7 @@ function renderSettingsModalTree() {
 }
 
 // ==========================================
-// 🔗 전역 이벤트 링크 인터페이스 (안정적 가교 연동)
+// 🔗 전역 이벤트 링크 인터페이스
 // ==========================================
 window.toggleGradeAccordion = function(gradeKey) {
     if (gradeSettings[gradeKey]) {
@@ -433,7 +451,7 @@ window.deleteAssessmentItem = async function(docId) {
     try {
         await deleteDoc(doc(db, 'assessments', docId));
     } catch (err) {
-        console.error("Firestore 삭제 예외 에러:", err);
+        console.error("Firestore 삭제 에러:", err);
         alert("❌ 클라우드 파일 삭제 도중 거부되었습니다.");
     }
 };
