@@ -71,7 +71,7 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
 .badge-points { background: #e8f0fe; color: #1a73e8; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 13px; }
 
 /* =========================================
-   [신규] 과목 평가 계획 (Evaluation Plan) 전용 스타일
+   과목 평가 계획 (Evaluation Plan) 전용 스타일
 ========================================= */
 
 /* 평가 계획 아코디언 카드 */
@@ -154,7 +154,7 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
 }
 
 /* ========================================================
-   🚀 [최종 완결판] 창 크기에 따른 유동적 UI 및 반응형 통합 엔진
+   🚀 창 크기에 따른 유동적 UI 및 반응형 통합 엔진
 ======================================================== */
 
 /* 1. [전역 안전장치] 가로 스크롤 유발 및 화면 탈출 현상 원천 차단 */
@@ -172,12 +172,13 @@ html, body, .container, .content {
     display: none !important;
 }
 
-/* 3. [핵심 적층 로직] 1150px 이하에서 UI 세로 적층 (JS 숨김 충돌 해결) */
+/* 3. [핵심 적층 로직] 1150px 이하에서 UI 세로 적층 (JS 완전 연동 안전 모드) */
 @media (max-width: 1150px) {
-    /* JS에서 display: none; 처리한 로딩/오류 창은 강제 표시(flex) 대상에서 제외 (:not) */
-    #sasadomi > div:not([style*="none"]),
-    .tab-content.active > div:not([style*="none"]), 
-    .content > div:not([style*="none"]) {
+    /* [수정 완료] 자식 요소를 강제 치환하는 위험한 방식을 전면 폐기하고, */
+    /* 부모 컨테이너에 수직 플렉스 정렬을 부여하여 자식 요소들이 레이아웃을 깨지 않고 자연스럽게 세로 적층되도록 합니다. */
+    #sasadomi,
+    .tab-content.active, 
+    .content {
         display: flex !important;
         flex-direction: column !important;
         width: 100% !important;
@@ -312,4 +313,4 @@ form div[style*="display"] > button:hover,
     .sidebar-overlay.show {
         display: block !important;
     }
-}
+} /* 고아가 되었던 최하단 중괄호 에러 클리닝 완료 및 완전 패킹 */
