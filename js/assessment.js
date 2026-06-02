@@ -65,6 +65,7 @@ function initializeAssessmentModule() {
         console.log("🎨 [Assessment Debug] 커스텀 CSS 스타일 주입 완료");
     }
 
+    // 🔍 [핵심 디버깅] HTML 안에 ID들이 정상적으로 존재하는지 교차 검증 검사기
     console.log("🔍 [Assessment Debug] 현재 HTML 문서 내 주요 ID 연결 상태 점검...");
     const targetIDs = [
         'btn-user-settings', 'assessment-settings-modal', 'assessment-btn-close-x', 
@@ -80,12 +81,23 @@ function initializeAssessmentModule() {
         } else {
             console.error(`🚨 [ID 매칭 실패!!] "${id}" 요소가 현재 HTML에 존재하지 않습니다! 관련 기능이 100% 작동하지 않습니다.`);
             
+            // 혹시 접두사(assessment-)가 빠진 과거 ID가 남아있는지 보조 확인
             const alternativeId = id.replace('assessment-', '').replace('btn-save', 'btn-close-settings').replace('btn-reset', 'btn-reset-settings').replace('btn-close-x', 'btn-close-settings-x');
             if (document.getElementById(alternativeId)) {
                 console.warn(`💡 [힌트] "${id}" 대신 접두사가 없는 구형 ID "${alternativeId}"가 HTML에 남아있습니다. HTML 태그의 ID를 수정하셔야 합니다!`);
             }
         }
     });
+
+    // 📦 [위치 오류 해결 보정 레이아웃 패치]
+    // 에디터 뷰가 메인 콘텐츠 레이아웃 영역 밖(예: body 루트 등)에 배치되어 밀리는 문제를 해결하기 위해
+    // 정상 위치로 잡혀있는 리스트 뷰(#tab-list-view)의 부모 컨테이너 내부 형제 노드로 강제 재배치합니다.
+    const listView = document.getElementById('tab-list-view');
+    const editorView = document.getElementById('assessment-tab-editor-view') || document.getElementById('tab-editor-view');
+    if (listView && editorView && editorView.parentNode !== listView.parentNode) {
+        console.log("📦 [레이아웃 보정] 에디터 뷰가 메인 콘텐츠 영역 밖에 위치하여 리스트 뷰의 부모 내부로 이동 조치되었습니다.");
+        listView.parentNode.appendChild(editorView);
+    }
 
     loadConfigFromStorage();
 
@@ -123,6 +135,9 @@ function initializeAssessmentModule() {
         renderList();
     });
 
+    // ==========================================
+    // ⚙️ 맞춤 설정 모달창 버튼 이벤트 바인딩 및 로그
+    // ==========================================
     const settingsModal = document.getElementById('assessment-settings-modal');
 
     // 1. 설정 창 열기 버튼
@@ -203,7 +218,9 @@ function initializeAssessmentModule() {
         });
     }
 
+    // ==========================================
     // ➕ "새 계획 추가" 클릭 이벤트 및 로그
+    // ==========================================
     const btnAdminAdd = document.getElementById('btn-admin-add');
     if (btnAdminAdd) {
         btnAdminAdd.addEventListener('click', () => {
@@ -223,7 +240,7 @@ function initializeAssessmentModule() {
                 gradeSelect.value = "1";
                 console.log("🎯 대상 학년 셀렉트 박스 기본값 '1학년' 강제 지정 성공");
             } else {
-                console.error("🚨 대상 학년 셀렉트 박스를 찾을 수 없습니다.");
+                console.error("🚨 대상 학년 셀렉트 박스(ID: assessment-editor-grade-select)를 찾을 수 없습니다.");
             }
             
             if (publicCheck) publicCheck.checked = true;
@@ -231,6 +248,26 @@ function initializeAssessmentModule() {
             switchToEditorView(); 
         });
     }
+
+    // ==========================================
+    // 🏃 타 메뉴/탭 이동 시 에디터 폼 자동 닫기 핸들러
+    // ==========================================
+    document.addEventListener('click', (e) => {
+        // 사이드바 메뉴, 외부 네비게이션 탭 등 다른 메뉴 요소를 클릭했을 경우 감지합니다.
+        // 단, 평가 계획 내부 모달창이나 계획 추가 버튼을 누른 경우는 예외로 둡니다.
+        const isExternalTabClick = e.target.closest('.sidebar, #sidebar, .sidebar-menu, .nav-tabs, [data-tab]') && 
+                                   !e.target.closest('#btn-admin-add, #btn-user-settings, #assessment-settings-modal');
+        
+        if (isExternalTabClick) {
+            console.log("🏃 [Assessment Debug] 다른 탭으로의 이동이 감지되어 작성 중인 에디터창을 닫습니다.");
+            editingId = null;
+            if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
+            switchToListView();
+        }
+    });
+
+    // 🔄 새로고침 시 무조건 에디터가 닫힌 상태(리스트 뷰)로 첫 노출을 안전하게 보장
+    switchToListView();
 }
 
 // 🛠️ 리치 에디터 라이브러리 연동 로그
@@ -295,6 +332,42 @@ function initRichEditorInstance() {
             }
         });
         console.log("✅ 리치 에디터 인스턴스 연결 성공!");
+
+        // 🚪 [에디터 내부 나가기 버튼 동적 생성 주입]
+        // rich-editor.js 연동 이후 UI가 완성되는 시점에 '나가기' 컴포넌트 버튼을 강제 렌더링합니다.
+        const editorView = document.getElementById('assessment-tab-editor-view') || document.getElementById('tab-editor-view');
+        if (editorView && !document.getElementById('assessment-custom-exit-btn')) {
+            const exitBtn = document.createElement('button');
+            exitBtn.id = 'assessment-custom-exit-btn';
+            exitBtn.type = 'button';
+            exitBtn.innerText = '나가기';
+            // 기존 테마에 어우러지는 모던 그레이 스타일 지정
+            exitBtn.style.cssText = 'padding: 6px 14px; font-size: 13px; background: #718096; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-left: 10px; vertical-align: middle; transition: background 0.2s;';
+            
+            exitBtn.addEventListener('mouseover', () => exitBtn.style.background = '#4a5568');
+            exitBtn.addEventListener('mouseout', () => exitBtn.style.background = '#718096');
+            exitBtn.addEventListener('click', () => {
+                if (confirm("작성 중인 내용을 저장하지 않고 에디터에서 나가시겠습니까?")) {
+                    editingId = null;
+                    if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
+                    switchToListView();
+                }
+            });
+
+            // 학년 셀렉트 박스 옆에 나란히 배치하거나, 부재 시 에디터 컨테이너 상단에 삽입
+            const gradeSelect = document.getElementById('assessment-editor-grade-select') || document.getElementById('editor-grade-select');
+            if (gradeSelect && gradeSelect.parentNode) {
+                gradeSelect.parentNode.appendChild(exitBtn);
+                console.log("🎯 학년 선택 제어판 영역 옆에 [나가기] 버튼 결합 성공");
+            } else {
+                const container = document.getElementById(containerId);
+                if (container && container.parentNode) {
+                    container.parentNode.insertBefore(exitBtn, container);
+                    console.log("🎯 에디터 상단에 [나가기] 버튼 삽입 성공");
+                }
+            }
+        }
+
     } catch (e) {
         console.error("🚨 NoticeEditor 인스턴스 생성 중 크리티컬 에러 발생:", e);
     }
@@ -579,17 +652,14 @@ window.editAssessmentItem = function(docId) {
     switchToEditorView(); 
 };
 
-window.deleteAssessmentItem = function(docId) {
-    // 💡 비동기 함수 내부에서 작동 유도를 위해 async 제거 후 즉시 실행 함수 처리 기법 유지
-    (async () => {
-        if (!confirm("해당 교과 평가 계획을 영구히 삭제하시겠습니까?")) return;
-        try {
-            await deleteDoc(doc(db, 'assessments', docId));
-            console.log(`🗑️ Firestore 문서 삭제 완료: ${docId}`);
-        } catch (err) {
-            console.error("Firestore 삭제 실패:", err);
-        }
-    })();
+window.deleteAssessmentItem = async function(docId) {
+    if (!confirm("해당 교과 평가 계획을 영구히 삭제하시겠습니까?")) return;
+    try {
+        await deleteDoc(doc(db, 'assessments', docId));
+        console.log(`🗑️ Firestore 문서 삭제 완료: ${docId}`);
+    } catch (err) {
+        console.error("Firestore 삭제 실패:", err);
+    }
 };
 
 // ⚡ DOM 상태에 관계없이 안전하게 실행 보장 유도
