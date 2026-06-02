@@ -22,13 +22,12 @@ function initSasadomi() {
             currentUid = user.uid;
             await checkSasaIntegrationStatus();
             
-            // 💡 [버그 수정 1] Firebase 인증 완료 시점 처리
-            // 인증이 완료되었을 때 현재 열려있는 탭이 '사사도미'라면 지연된 크롤링을 즉시 실행합니다.
+            // 💡 [수정됨] 새로고침 시에도 동일하게 로딩 메시지를 띄우기 위해 
+            // 직접 함수를 호출하지 않고 triggerSasaTabLoad()를 실행합니다.
             const currentTab = localStorage.getItem('sasa_last_active_tab');
             if (currentTab === 'sasadomi' && savedSasaId && savedSasaToken) {
                 console.log("[Sasadomi] 인증 완료. 지연된 데이터 크롤링을 시작합니다.");
-                loadSasadomiData();
-                loadApplicationData();
+                window.triggerSasaTabLoad(); 
             }
         } else {
             currentUid = null;
@@ -639,18 +638,23 @@ function setupApplicationButtons() {
 window.triggerSasaTabLoad = async function() {
     console.log("[Hook] 사사도미 탭 진입 감지됨. 데이터 스크래핑 런타임 시작.");
     
+    // 1. 아직 Firebase 인증이 안 끝났다면 에러를 내지 않고 대기시킵니다.
+    // (인증이 끝나면 onAuthStateChanged가 알아서 이 함수를 다시 호출해 줍니다)
+    if (!currentUid) {
+        console.log("[Hook] Firebase 인증 대기 중...");
+        return; 
+    }
+
     const loadingMsg = document.getElementById('sasa-loading-msg');
     
-    // 1. 로딩 메시지 띄우기
+    // 2. 로딩 메시지 띄우기
     if (loadingMsg) loadingMsg.style.display = 'block';
 
     try {
-        // 계정 연동 상태 확인 (완료될 때까지 대기)
         await checkSasaIntegrationStatus();
         
         if (savedSasaId && savedSasaToken) {
-            // 2. 두 가지 데이터를 병렬로 모두 불러올 때까지 대기
-            // (주의: 내부 load 함수들이 async 함수이거나 Promise를 반환해야 완벽하게 대기합니다)
+            // 3. 데이터를 모두 불러올 때까지 대기
             await Promise.all([
                 loadSasadomiData(),      
                 loadApplicationData()
@@ -659,7 +663,7 @@ window.triggerSasaTabLoad = async function() {
     } catch (error) {
         console.error("[Sasadomi] 데이터 로딩 중 오류 발생:", error);
     } finally {
-        // 3. 데이터를 다 불러왔거나 오류가 났어도 로딩 메시지 숨기기
+        // 4. 데이터를 다 불러왔거나 오류가 났어도 로딩 메시지 숨기기
         if (loadingMsg) loadingMsg.style.display = 'none';
     }
 };
