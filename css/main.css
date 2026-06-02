@@ -219,16 +219,22 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
         min-height: auto !important;
     }
 
-    /* 4. 입력 폼(사사도미 등) 라벨과 입력칸을 무조건 세로로 배치하고 꽉 채움 */
+    /* 4. 입력 폼(사사도미 등) 요소들을 세로로 배치하되 가로 폭을 꽉 채움(stretch) */
     .form-group, 
     .input-group,
     form,
     #sasa-credential-form {
         display: flex !important;
         flex-direction: column !important;
-        align-items: flex-start !important;
+        align-items: stretch !important;
         width: 100% !important;
         gap: 8px !important;
+    }
+
+    /* 폼이나 모달 하단의 버튼 그룹 박스도 무조건 100% 너비를 쓰도록 강제 */
+    form > div[style*="display"], 
+    #sasa-credential-form > div[style*="display"] {
+        width: 100% !important;
     }
 
     /* 5. 텍스트 박스, 날짜 선택기 등이 찌그러지지 않고 100% 폭을 가지도록 설정 */
@@ -243,11 +249,17 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
         box-sizing: border-box !important;
     }
 
-    /* 6. 버튼 텍스트 줄바꿈 방지 및 최소 크기 보장 (찌그러짐 방지) */
+    /* 6. 버튼 텍스트 줄바꿈 방지 및 버튼이 가로 공간을 골고루 나눠 가지도록 설정 */
     button, .btn-primary, .cl-btn-primary {
-        flex-shrink: 0 !important; /* 버튼이 글자 크기보다 작아지며 찌그러지는 것 방지 */
-        word-break: keep-all !important; /* 텍스트 줄바꿈 방지 */
+        flex-shrink: 0 !important; 
+        word-break: keep-all !important; 
         white-space: nowrap !important;
+    }
+    
+    /* 하단 신청/취소 버튼 등이 가로 공간을 반반씩(50:50) 차지하도록 설정 */
+    form > div[style*="display"] > button,
+    #sasa-credential-form > div[style*="display"] > button {
+        flex: 1 !important;
     }
 
     /* 7. 제목 텍스트 공간 확보 및 말줄임 처리 */
