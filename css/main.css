@@ -328,3 +328,33 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
         box-sizing: border-box !important;
     }
 }
+
+/* ========================================================
+   ✨ [추가] 사사도미 외출/자율학습 폼 우측 삐져나옴(잘림) 완벽 방지
+======================================================== */
+@media (max-width: 768px) {
+    /* 1. 전체 모달 및 폼에 여백이 박스를 뚫고 나가지 못하도록 안전장치 추가 */
+    .modal-content, form, .card {
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+    }
+    
+    .modal-content *, form *, .card * {
+        box-sizing: border-box !important;
+    }
+
+    /* 2. 폼 내부의 가로 배치(flex) 요소들이 좁을 때 화면 밖으로 밀리지 않게 강제 설정 */
+    form div[style*="display: flex"], 
+    form div[style*="display:flex"] {
+        flex-wrap: wrap !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* 3. ⭐️ 핵심: flex 안에서 input, select 들이 100%를 고집하여 삐져나가는 것 방지 */
+    form div[style*="flex"] > input, 
+    form div[style*="flex"] > select {
+        flex: 1 1 auto !important; /* 남은 가로 공간을 사이좋게 나눠 가지도록 설정 */
+        min-width: 0 !important;   /* 화면 밖으로 밀려나는 것을 완벽히 차단 */
+    }
+}
