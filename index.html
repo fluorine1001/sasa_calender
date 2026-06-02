@@ -834,14 +834,18 @@
     
     <div id="assessment-tab-editor-view" style="display: none; margin-top: 15px;">
         <div style="margin-bottom: 16px; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; gap: 24px; align-items: center;">
-            <label style="font-size: 14px; font-weight: bold; color: #4a5568;">
+            <div style="font-size: 14px; font-weight: bold; color: #4a5568; display: flex; align-items: center; gap: 15px;">
                 대상 학년: 
-                <select id="assessment-editor-grade-select" style="padding: 6px 12px; border: 1px solid #cbd5e0; border-radius: 4px; margin-left: 8px; font-size:14px; background: #fff;">
-                    <option value="1">1학년</option>
-                    <option value="2">2학년</option>
-                    <option value="3">3학년</option>
-                </select>
-            </label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500;">
+                    <input type="checkbox" class="assessment-grade-checkbox" value="1" checked> 1학년
+                </label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500;">
+                    <input type="checkbox" class="assessment-grade-checkbox" value="2"> 2학년
+                </label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500;">
+                    <input type="checkbox" class="assessment-grade-checkbox" value="3"> 3학년
+                </label>
+            </div>
             <label style="font-size: 14px; font-weight: bold; color: #4a5568; display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="checkbox" id="assessment-editor-public-check" checked style="width: 16px; height: 16px;">
                 전체 학생에게 공개 (체크 해제 시 비공개)
