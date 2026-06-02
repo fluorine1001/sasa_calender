@@ -7,6 +7,7 @@ export class NoticeEditor {
         this.latexGuide = latexGuide;
         this.callbacks = callbacks;
         this.quill = null;
+        this.isHtmlMode = false; // 💡 HTML 편집 모드 상태 플래그 추가
         
         // 💡 Cloudinary 설정 (이미지/비디오 공용 업로드를 위해 auto 사용)
         this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/djryl7blo/auto/upload"; 
@@ -31,8 +32,7 @@ export class NoticeEditor {
     // 📌 전역 UI 및 필수 CSS (통합 모달창, 우클릭 메뉴)
     renderGlobalUI() {
         if (!document.getElementById('quill-custom-media-ui')) {
-            // 💡 [핵심 해결] 에디터 내 동영상(iframe) 클릭 방해 차단 CSS 주입
-            // 이를 통해 Backspace로 쉽게 영상을 삭제할 수 있고, 커스텀 우클릭 메뉴도 좌표 기반으로 띄울 수 있음!
+            // 💡 에디터 내 동영상(iframe) 클릭 방해 차단 및 커스텀 폰트/크기/줄간격 드롭다운 UI CSS 주입
             const style = document.createElement('style');
             style.innerHTML = `
                 .ql-editor iframe, .ql-editor video {
@@ -44,6 +44,25 @@ export class NoticeEditor {
                 #quill-media-context-menu div:hover {
                     background-color: #f8fafc !important;
                 }
+
+                /* 💡 커스텀 툴바 드롭다운 라벨링 (크기, 글꼴, 줄간격) */
+                .ql-snow .ql-picker.ql-size { width: 75px; }
+                .ql-snow .ql-picker.ql-size .ql-picker-label::before { content: '크기'; }
+                .ql-snow .ql-picker.ql-size .ql-picker-item::before { content: '기본 (14px)'; }
+                .ql-snow .ql-picker.ql-size .ql-picker-label[data-value]::before,
+                .ql-snow .ql-picker.ql-size .ql-picker-item[data-value]::before { content: attr(data-value) !important; }
+                
+                .ql-snow .ql-picker.ql-font { width: 95px; }
+                .ql-snow .ql-picker.ql-font .ql-picker-label::before { content: '글꼴'; }
+                .ql-snow .ql-picker.ql-font .ql-picker-item::before { content: '기본 서체'; }
+                .ql-snow .ql-picker.ql-font .ql-picker-label[data-value]::before,
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value]::before { content: attr(data-value) !important; font-family: attr(data-value); }
+
+                .ql-snow .ql-picker.ql-line-height { width: 85px; }
+                .ql-snow .ql-picker.ql-line-height .ql-picker-label::before { content: '줄 간격'; }
+                .ql-snow .ql-picker.ql-line-height .ql-picker-item::before { content: '기본 (1.5)'; }
+                .ql-snow .ql-picker.ql-line-height .ql-picker-label[data-value]::before,
+                .ql-snow .ql-picker.ql-line-height .ql-picker-item[data-value]::before { content: attr(data-value) !important; }
             `;
             document.head.appendChild(style);
 
@@ -114,12 +133,21 @@ export class NoticeEditor {
 
     renderUI() {
         this.container.style.cssText = "padding: 15px; margin-bottom: 20px; background: #fdfdfd; border: 1px dashed #1a73e8; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;";
+        
+        // 💡 HTML 모드 토글 버튼 및 에디터/HTML 뷰어 분리 컨테이너 추가
         this.container.innerHTML = `
-            <div style="font-weight:bold; color:#1a73e8; font-size:14px; margin-bottom:5px;" class="admin-form-title">📝 새 글 작성</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <div style="font-weight:bold; color:#1a73e8; font-size:14px;" class="admin-form-title">📝 새 글 작성</div>
+                <button type="button" class="btn-toggle-html" style="background:#475569; color:#fff; border:none; padding:4px 10px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">💻 HTML 편집 모드 켜기</button>
+            </div>
+            
             <input type="text" class="new-notice-title" placeholder="제목" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
             
-            <div class="editor-wrapper" style="background:#fff; border-radius:4px;">
-                <div class="new-notice-editor" style="height: 250px; font-size: 14px;"></div>
+            <div class="editor-view-container" style="background:#fff; border-radius:4px; position:relative;">
+                <div class="editor-wrapper">
+                    <div class="new-notice-editor" style="height: 250px; font-size: 14px;"></div>
+                </div>
+                <textarea class="new-notice-html-view" placeholder="이곳에 커스텀 HTML 태그 및 CSS를 자유롭게 작성하세요.\\n\\n⚠️ 주의: HTML 모드 상태에서 고급 스타일(무지개색, 애니메이션 등)을 입력 후, '에디터(WYSIWYG) 모드'로 되돌아가면 안전하지 않은 태그는 퀼(Quill) 에디터에 의해 삭제될 수 있습니다. 고급 코드를 유지하려면 이 HTML 모드를 켠 상태에서 바로 '저장하기' 버튼을 누르세요." style="display:none; width:100%; height:300px; padding:15px; box-sizing:border-box; font-family:monospace; border:1px solid #ccc; font-size:13px; line-height:1.5; background:#1e1e1e; color:#d4d4d4; resize:vertical;"></textarea>
             </div>
             
             <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; margin-top: 4px;">
@@ -147,6 +175,24 @@ export class NoticeEditor {
     initQuill() {
         if (!window.Quill) return;
 
+        // 💡 1. 폰트 크기, 글꼴, 줄 간격 지정을 위한 Parchment 스타일 모듈 등록
+        const Parchment = window.Quill.import('parchment');
+        
+        const SizeClass = window.Quill.import('attributors/style/size');
+        SizeClass.whitelist = ['10px', '12px', '14px', '16px', '18px', '20px', '24px', '30px'];
+        window.Quill.register(SizeClass, true);
+
+        const FontClass = window.Quill.import('attributors/style/font');
+        // 원하는 글꼴 추가 (시스템 기본 폰트 위주)
+        FontClass.whitelist = ['sans-serif', 'serif', 'monospace', 'Nanum Gothic', 'Malgun Gothic', '궁서체', 'Comic Sans MS'];
+        window.Quill.register(FontClass, true);
+
+        const LineHeightClass = new Parchment.Attributor.Style('line-height', 'line-height', {
+            scope: Parchment.Scope.BLOCK, // 블록(문단) 단위 적용
+            whitelist: ['1.0', '1.2', '1.5', '1.8', '2.0', '2.5', '3.0']
+        });
+        window.Quill.register(LineHeightClass, true);
+
         const targetEditorTarget = this.container.querySelector('.new-notice-editor');
         
         this.quill = new Quill(targetEditorTarget, {
@@ -155,10 +201,13 @@ export class NoticeEditor {
             modules: {
                 toolbar: {
                     container: [
-                        [{ 'header': [1, 2, false] }],
+                        // 💡 2. 툴바 배열에 새로 등록한 글꼴, 크기, 줄간격 옵션 추가
+                        [{ 'font': FontClass.whitelist }, { 'size': SizeClass.whitelist }],
+                        [{ 'line-height': LineHeightClass.whitelist }, { 'header': [1, 2, 3, false] }],
                         ['bold', 'italic', 'underline', 'strike'],
                         [{ 'color': [] }, { 'background': [] }],
                         [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'align': [] }],
                         ['link', 'image', 'video', 'clean']
                     ]
                 }
@@ -351,12 +400,10 @@ export class NoticeEditor {
         this.openMediaModal('edit', this.modalState.type, node, currentW, currentH);
     }
 
-    // 💡 [새 기능] 커스텀 메뉴에서 [미디어 삭제] 클릭 시 실행될 함수
     deleteTargetMedia() {
         const node = this.modalState.targetNode;
         if (!node) return;
         
-        // Quill 에디터의 내부 상태(Delta)에 맞춰 안정적으로 삭제
         if (window.Quill) {
             const blot = window.Quill.find(node);
             if (blot) {
@@ -364,7 +411,7 @@ export class NoticeEditor {
                 return;
             }
         }
-        node.remove(); // 최후의 백업
+        node.remove(); 
     }
 
     initEvents() {
@@ -378,7 +425,6 @@ export class NoticeEditor {
             
             for (let media of medias) {
                 const rect = media.getBoundingClientRect();
-                // 사용자가 해당 이미지/동영상 위에서 우클릭했는지 좌표 계산
                 if (e.clientX >= rect.left - 1 && e.clientX <= rect.right + 1 &&
                     e.clientY >= rect.top - 1 && e.clientY <= rect.bottom + 1) {
                     targetMedia = media;
@@ -455,17 +501,55 @@ export class NoticeEditor {
             }
         });
 
+        // 💡 HTML / WYSIWYG 모드 전환 이벤트
+        const btnToggleHtml = this.container.querySelector('.btn-toggle-html');
+        const htmlView = this.container.querySelector('.new-notice-html-view');
+        const editorWrapper = this.container.querySelector('.editor-wrapper');
+        
+        btnToggleHtml.addEventListener('click', () => {
+            if (this.isHtmlMode) {
+                // HTML -> 에디터 복귀
+                this.quill.clipboard.dangerouslyPasteHTML(htmlView.value);
+                htmlView.style.display = 'none';
+                editorWrapper.style.display = 'block';
+                
+                const toolbarElem = this.container.querySelector('.ql-toolbar');
+                if (toolbarElem) toolbarElem.style.display = 'block';
+                
+                btnToggleHtml.innerText = "💻 HTML 편집 모드 켜기";
+                btnToggleHtml.style.background = "#475569";
+                this.isHtmlMode = false;
+            } else {
+                // 에디터 -> HTML 전환
+                htmlView.value = this.quill.root.innerHTML;
+                htmlView.style.display = 'block';
+                editorWrapper.style.display = 'none';
+                
+                const toolbarElem = this.container.querySelector('.ql-toolbar');
+                if (toolbarElem) toolbarElem.style.display = 'none';
+                
+                btnToggleHtml.innerText = "👀 에디터(WYSIWYG) 모드로 복귀";
+                btnToggleHtml.style.background = "#1a73e8";
+                this.isHtmlMode = true;
+            }
+        });
+
         this.container.querySelector('.btn-add-link-row').addEventListener('click', () => this.addLinkRow());
         this.container.querySelector('.link-inputs-container').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-remove-link-row')) e.target.closest('.link-input-row').remove();
         });
+        
         this.container.querySelector('.btn-cancel-edit').addEventListener('click', () => {
             this.reset();
             if (this.callbacks.onCancel) this.callbacks.onCancel();
         });
+        
         this.container.querySelector('.btn-submit-notice').addEventListener('click', async (e) => {
             const title = this.container.querySelector('.new-notice-title').value.trim();
-            const bodyHtml = this.quill ? this.quill.root.innerHTML : '';
+            
+            // 💡 HTML 모드가 켜진 상태라면 textarea 값을 우선 추출하여 고급 태그를 보존
+            const bodyHtml = this.isHtmlMode ? htmlView.value : (this.quill ? this.quill.root.innerHTML : '');
+            
             if (!title) return alert("제목을 입력해주세요.");
             
             const fileRows = this.container.querySelectorAll('.link-input-row');
@@ -583,6 +667,11 @@ export class NoticeEditor {
     }
 
     setData(title, body, files) {
+        // 기존 뷰 상태 강제 리셋 (HTML 모드가 열려 있었다면 닫기)
+        if (this.isHtmlMode) { 
+            this.container.querySelector('.btn-toggle-html').click(); 
+        }
+
         this.container.querySelector('.new-notice-title').value = title;
         if (this.quill) this.quill.clipboard.dangerouslyPasteHTML(body || '');
         const linkContainer = this.container.querySelector('.link-inputs-container');
@@ -592,6 +681,10 @@ export class NoticeEditor {
     }
 
     reset() {
+        if (this.isHtmlMode) { 
+            this.container.querySelector('.btn-toggle-html').click(); 
+        }
+        
         this.container.querySelector('.new-notice-title').value = '';
         if (this.quill) this.quill.setContents([]);
         this.container.querySelector('.link-inputs-container').innerHTML = '';
