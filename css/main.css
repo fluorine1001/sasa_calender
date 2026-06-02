@@ -1,4 +1,6 @@
-/* 기본 레이아웃 */
+/* =========================================
+   기본 레이아웃 
+========================================= */
 body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; height: 100%; }
 .container { display: flex; height: 100vh; }
 
@@ -154,45 +156,47 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
 }
 
 /* ========================================================
-   🚀 창 크기에 따른 유동적 UI 및 반응형 통합 엔진
+   🚀 창 크기에 따른 유동적 UI 및 반응형 통합 엔진 (안정화 완료)
 ======================================================== */
 
-/* 1. [전역 안전장치] 가로 스크롤 유발 및 화면 탈출 현상 원천 차단 */
+/* 1. [전역 안전장치] 가로 스크롤 유발 현상 제어 */
 *, *:before, *:after {
-    box-sizing: border-box !important;
+    box-sizing: border-box; /* 리치 에디터 툴바 깨짐 방지를 위해 !important 제거 */
 }
 
-html, body, .container, .content {
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
+html, body, .container {
+    max-width: 100vw;
+    overflow-x: hidden;
+}
+
+/* [UI 훼손 복구] .content가 사이드바 우측 공간을 유동적(flex:1)으로 채우도록 가두고 유연성 확보 */
+.content {
+    min-width: 0; 
 }
 
 /* 2. [기본 노출 조건] PC 등 화면이 넓을 때는 햄버거 버튼 완벽 은닉 */
 .mobile-menu-toggle {
-    display: none !important;
+    display: none;
 }
 
 /* 3. [핵심 적층 로직] 1150px 이하에서 UI 세로 적층 (JS 완전 연동 안전 모드) */
 @media (max-width: 1150px) {
-    /* [수정 완료] 자식 요소를 강제 치환하는 위험한 방식을 전면 폐기하고, */
-    /* 부모 컨테이너에 수직 플렉스 정렬을 부여하여 자식 요소들이 레이아웃을 깨지 않고 자연스럽게 세로 적층되도록 합니다. */
-    #sasadomi,
-    .tab-content.active, 
-    .content {
+    /* [버그 수정] 미작동 탭 강제 노출 현상 완전 제거 */
+    /* 활성화 표시(.active)가 붙은 탭 내부 영역과 에디터 뷰의 내부 정렬만 세로형태로 자연스럽게 바꾸도록 제한합니다. */
+    .tab-content.active,
+    #tab-editor-view {
         display: flex !important;
         flex-direction: column !important;
-        width: 100% !important;
         gap: 20px !important;
     }
 
-    /* 우측 요소(벌점 규정 등)가 옆에 붙지 못하도록 카드의 가로폭을 100%로 팽창시켜 하단으로 밀어냄 */
+    /* 우측 카드들이 예쁘게 한 줄씩 쌓이도록 100%폭 확장 처리 */
     #sasadomi .card, 
     .tab-content .card, 
     .content .card {
         width: 100% !important;
         max-width: 100% !important;
         min-width: 100% !important;
-        flex: 0 0 100% !important;
         margin: 0 0 20px 0 !important; 
         box-sizing: border-box !important;
     }
@@ -211,24 +215,22 @@ html, body, .container, .content {
     }
 }
 
-/* 4. [동적 폰트 스케일링] 화면이 좁아질 때 글자가 잘리지 않도록 자동 축소 (Fluid Typography) */
+/* 4. [동적 폰트 스케일링] Fluid Typography 가독성 원상 복구 */
 h1, h2, h3, .card h2, .content h2 {
     font-size: clamp(16px, 4vw, 24px) !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    white-space: normal !important; /* [복구] nowrap 제거하여 창 너비 축소 시 한글 타이틀이 예쁘게 자동 줄바꿈되도록 수정 */
     word-break: keep-all !important;
 }
 
 form label, .form-group label {
     font-size: clamp(11px, 2.8vw, 13px) !important;
-    white-space: nowrap !important;
+    white-space: normal !important; /* [복구] 글씨가 잘리는 일 없이 다음 줄로 넘어가 가독성 확보 */
     word-break: keep-all !important;
 }
 
 button, .btn, form button {
     font-size: clamp(11px, 2.8vw, 14px) !important;
-    white-space: nowrap !important;
+    white-space: nowrap !important; /* 버튼 텍스트는 깨지지 않는 것이 가독성에 좋습니다 */
     word-break: keep-all !important;
 }
 
@@ -236,7 +238,7 @@ button, .btn, form button {
 form div[style*="display"] > button,
 .modal-content div[style*="display"] > button {
     background-color: #3498db !important; 
-    color: #ffffff !important;            
+    color: #ffffff !important;             
     border: none !important;              
     border-radius: 6px !important;
     padding: 10px 16px !important;
@@ -313,4 +315,4 @@ form div[style*="display"] > button:hover,
     .sidebar-overlay.show {
         display: block !important;
     }
-} /* 고아가 되었던 최하단 중괄호 에러 클리닝 완료 및 완전 패킹 */
+}
