@@ -122,7 +122,6 @@ function initializeAssessmentModule() {
         console.log("🎨 [Assessment Debug] 커스텀 CSS 스타일 주입 완료");
     }
 
-    // 🔍 [핵심 디버깅] HTML 안에 ID들이 정상적으로 존재하는지 교차 검증 검사기
     console.log("🔍 [Assessment Debug] 현재 HTML 문서 내 주요 ID 연결 상태 점검...");
     const targetIDs = [
         'btn-user-settings', 'assessment-settings-modal', 'assessment-btn-close-x', 
@@ -140,7 +139,6 @@ function initializeAssessmentModule() {
         }
     });
 
-    // 📦 [위치 오류 해결 보정 레이아웃 패치]
     const listView = document.getElementById('tab-list-view');
     const editorView = document.getElementById('assessment-tab-editor-view') || document.getElementById('tab-editor-view');
     if (listView && editorView && editorView.parentNode !== listView.parentNode) {
@@ -154,7 +152,6 @@ function initializeAssessmentModule() {
         if (user) {
             currentUid = user.uid;
             
-            // 1. 관리자 여부 확인
             try {
                 const userDoc = await getDoc(doc(db, `users/${currentUid}`));
                 if (userDoc.exists()) {
@@ -167,7 +164,6 @@ function initializeAssessmentModule() {
                 isCurrentUserAdmin = false; 
             }
 
-            // 🔥 2. Firestore에서 개인 맞춤 설정 불러오기
             try {
                 const prefDocRef = doc(db, 'users', currentUid, 'preferences', 'assessments');
                 const prefDocSnap = await getDoc(prefDocRef);
@@ -190,7 +186,6 @@ function initializeAssessmentModule() {
                 console.error("🚨 개인 맞춤 설정 로드 중 오류 발생:", err);
             }
             
-            // 3. UI 및 실시간 동기화 트리거
             if (isCurrentUserAdmin) {
                 document.querySelectorAll('#btn-admin-add, .admin-only').forEach(el => el.style.setProperty('display', 'inline-block', 'important'));
                 initRichEditorInstance(); 
@@ -212,7 +207,6 @@ function initializeAssessmentModule() {
 
     const settingsModal = document.getElementById('assessment-settings-modal');
 
-    // 1. 설정 창 열기 버튼
     const btnUserSettings = document.getElementById('btn-user-settings');
     if (btnUserSettings) {
         btnUserSettings.addEventListener('click', () => {
@@ -221,7 +215,6 @@ function initializeAssessmentModule() {
         });
     }
 
-    // 2. 상단 ✕ 버튼
     const btnCloseX = document.getElementById('assessment-btn-close-x') || document.getElementById('btn-close-settings-x');
     if (btnCloseX) {
         btnCloseX.addEventListener('click', () => {
@@ -229,7 +222,6 @@ function initializeAssessmentModule() {
         });
     }
 
-    // 3. 설정 저장 및 닫기 버튼 (Firestore 원격 저장 로직 적용)
     const btnSave = document.getElementById('assessment-btn-save') || document.getElementById('btn-close-settings');
     if (btnSave) {
         btnSave.addEventListener('click', async () => {
@@ -242,14 +234,12 @@ function initializeAssessmentModule() {
             btnSave.innerText = "저장 중...";
 
             try {
-                // 1. 학년별 상위 탭 표시 여부 수집
                 document.querySelectorAll('.setting-grade-visible').forEach(chk => {
                     const gradeKey = chk.dataset.grade;
                     if (!gradeSettings[gradeKey]) gradeSettings[gradeKey] = { sort: 'priority', expanded: true };
                     gradeSettings[gradeKey].visible = chk.checked;
                 });
 
-                // 2. 개별 과목 숨김 및 순위 수집
                 const newUserSettings = [];
                 document.querySelectorAll('.setting-visible').forEach(chk => {
                     const docId = chk.getAttribute('data-id');
@@ -269,8 +259,6 @@ function initializeAssessmentModule() {
                 });
 
                 userSettings = newUserSettings;
-
-                // 3. Firestore 동기화
                 await savePreferencesToCloud();
 
                 renderList();
@@ -287,7 +275,6 @@ function initializeAssessmentModule() {
         });
     }
 
-    // 4. 기본값 초기화 버튼 (Firestore 원격 초기화)
     const btnReset = document.getElementById('assessment-btn-reset') || document.getElementById('btn-reset-settings');
     if (btnReset) {
         btnReset.addEventListener('click', async () => {
@@ -308,7 +295,6 @@ function initializeAssessmentModule() {
         });
     }
 
-    // ➕ "새 계획 추가" 클릭 이벤트
     const btnAdminAdd = document.getElementById('btn-admin-add');
     if (btnAdminAdd) {
         btnAdminAdd.addEventListener('click', () => {
@@ -326,7 +312,6 @@ function initializeAssessmentModule() {
         });
     }
 
-    // 🏃 타 메뉴/탭 이동 시 에디터 폼 자동 닫기 핸들러
     document.addEventListener('click', (e) => {
         const isExternalTabClick = e.target.closest('.sidebar, #sidebar, .sidebar-menu, .nav-tabs, [data-tab]') && 
                                    !e.target.closest('#btn-admin-add, #btn-user-settings, #assessment-settings-modal');
@@ -341,7 +326,6 @@ function initializeAssessmentModule() {
     switchToListView();
 }
 
-// ✍️ 리치 에디터 라이브러리 연동 및 "데이터 아이디 기반 다중 학년 분할/공유 저장" 적용
 function initRichEditorInstance() {
     const containerId = document.getElementById('assessment-editor-container') ? 'assessment-editor-container' : 'editor-container';
     
@@ -434,7 +418,6 @@ function initRichEditorInstance() {
             }
         });
 
-        // 🚪 [에디터 내부 나가기 버튼 동적 생성 주입]
         const editorView = document.getElementById('assessment-tab-editor-view') || document.getElementById('tab-editor-view');
         if (editorView && !document.getElementById('assessment-custom-exit-btn')) {
             const exitBtn = document.createElement('button');
@@ -485,7 +468,6 @@ function switchToEditorView() {
     if (editorView) editorView.style.display = 'block';
 }
 
-// 📡 실시간 메타 동기화
 function startSnapshotSync() {
     if (unsubscribeAssessments) unsubscribeAssessments();
     
@@ -527,15 +509,26 @@ function startSnapshotSync() {
     });
 }
 
+// 👀 메인 화면 렌더링 로직 (학년 탭 완벽 숨김 및 예외처리 적용)
 function renderList() {
     const mainViewTarget = document.getElementById('evaluation-list');
     if (!mainViewTarget) return;
 
     const filterKeyword = document.getElementById('search-input')?.value.toLowerCase() || '';
     let combinedHtml = '';
+    let renderedTabsCount = 0; // 🔥 화면에 실제로 렌더링된 탭의 개수를 추적
 
     ['1', '2', '3'].forEach(gradeKey => {
         const currentGradeConf = gradeSettings[gradeKey] || { visible: true, sort: 'priority', expanded: true };
+        
+        // 🚨 [핵심 수정] 사용자가 맞춤 설정에서 이 학년 전체를 껐다면 
+        // 껍데기(아코디언 HTML)조차 렌더링하지 않고 완전히 무시(Early Return)합니다.
+        if (currentGradeConf.visible === false) {
+            return;
+        }
+
+        renderedTabsCount++; // 렌더링될 탭 카운트 증가
+
         let matchedItems = subjects.filter(sub => sub.grade === gradeKey);
 
         if (filterKeyword) {
@@ -545,21 +538,14 @@ function renderList() {
             );
         }
 
-        // 전역 공개 설정 반영
         if (!isCurrentUserAdmin) {
             matchedItems = matchedItems.filter(sub => sub.isPublic !== false);
         }
 
-        // 개인 화면 표시 설정 반영
-        const isGradeTabVisible = currentGradeConf.visible;
-        let visibleItems = [];
-        
-        if (isGradeTabVisible) {
-            visibleItems = matchedItems.filter(sub => {
-                const preference = userSettings.find(s => s.id === sub.id) || { visible: true };
-                return preference.visible;
-            });
-        }
+        let visibleItems = matchedItems.filter(sub => {
+            const preference = userSettings.find(s => s.id === sub.id) || { visible: true };
+            return preference.visible;
+        });
 
         const activeSortStrategy = currentGradeConf.sort || 'priority';
         if (activeSortStrategy === 'priority') {
@@ -583,9 +569,6 @@ function renderList() {
         const bodyToggleCss = isOpen ? 'block' : 'none';
         const caret = isOpen ? '▼' : '▶';
         
-        // 텍스트 직관화 (숨김 여부)
-        const displayBadge = isGradeTabVisible ? '' : '<span class="badge" style="background: #edf2f7; color: #4a5568; margin-left: 6px;">내 화면에서 숨김됨</span>';
-
         combinedHtml += `
             <div class="grade-accordion-section" data-grade="${gradeKey}">
                 <div class="grade-accordion-header" onclick="window.toggleGradeAccordion('${gradeKey}')">
@@ -593,7 +576,6 @@ function renderList() {
                         <span style="font-size:11px; color:#a0aec0;">${caret}</span>
                         <span>${gradeKey}학년 평가 항목 계획</span>
                         <span style="font-size: 12px; font-weight: normal; color: #718096; margin-left:2px;">(총 ${visibleItems.length}개)</span>
-                        ${displayBadge}
                     </div>
                     <div class="grade-accordion-controls" onclick="event.stopPropagation()">
                         <label style="font-size: 11px; font-weight: 600; color: #4a5568;">정렬:</label>
@@ -607,7 +589,7 @@ function renderList() {
                 <div class="grade-accordion-body grade-body-${gradeKey}" style="display: ${bodyToggleCss};">
                     ${visibleItems.length === 0 ? `
                         <div style="text-align: center; padding: 24px; color: #a0aec0; font-size: 13px;">
-                            ${isGradeTabVisible ? '등록된 데이터가 없거나 맞춤설정에서 모두 체크 해제되었습니다.' : '👁️ 맞춤 설정에서 이 학년 탭을 숨기도록 설정하셨습니다.'}
+                            등록된 데이터가 없거나 맞춤설정에서 이 학년의 모든 과목을 체크 해제하셨습니다.
                         </div>
                     ` : visibleItems.map(sub => {
                         const internalSecretTag = sub.isPublic === false ? '<span class="badge badge-private" style="margin-left:5px;">원격비공개</span>' : '';
@@ -642,6 +624,15 @@ function renderList() {
             </div>
         `;
     });
+
+    // 🔥 [신규 예외 처리] 렌더링된 탭이 단 한 개도 없는 경우 (모두 숨김 처리 시)
+    if (renderedTabsCount === 0) {
+        combinedHtml = `
+            <div style="text-align: center; padding: 50px 20px; background: #fff; border: 1px dashed #cbd5e0; border-radius: 10px; color: #718096; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.01);">
+                👁️ 우측 상단의 '맞춤 설정'에서 화면에 표시할 학년 탭을 선택해 주세요.
+            </div>
+        `;
+    }
 
     mainViewTarget.innerHTML = combinedHtml;
 }
