@@ -1,6 +1,5 @@
 // js/rich-editor.js
 export class NoticeEditor {
-    // 다중 에디터 간에 우클릭 컨텍스트 메뉴를 공유하기 위한 전역 활성 인스턴스 저장소
     static activeInstance = null;
 
     constructor(containerId, latexGuide, callbacks) {
@@ -9,7 +8,7 @@ export class NoticeEditor {
         this.callbacks = callbacks;
         this.quill = null;
         
-        // 💡 Cloudinary 설정
+        // 💡 Cloudinary 설정 (이미지/비디오 공용 업로드를 위해 auto 사용)
         this.cloudinaryUrl = "https://api.cloudinary.com/v1_1/djryl7blo/auto/upload"; 
         this.uploadPreset = "SASAcalender"; 
 
@@ -29,75 +28,90 @@ export class NoticeEditor {
         this.initEvents();
     }
 
-    // 📌 전역 UI (통합 모달창, 우클릭 메뉴 - 단 한 번만 생성되도록 보장)
+    // 📌 전역 UI 및 필수 CSS (통합 모달창, 우클릭 메뉴)
     renderGlobalUI() {
-        if (document.getElementById('quill-custom-media-ui')) return;
+        if (!document.getElementById('quill-custom-media-ui')) {
+            // 💡 [핵심 해결] 에디터 내 동영상(iframe) 클릭 방해 차단 CSS 주입
+            // 이를 통해 Backspace로 쉽게 영상을 삭제할 수 있고, 커스텀 우클릭 메뉴도 좌표 기반으로 띄울 수 있음!
+            const style = document.createElement('style');
+            style.innerHTML = `
+                .ql-editor iframe, .ql-editor video {
+                    pointer-events: none !important; 
+                }
+                .ql-editor img {
+                    cursor: context-menu;
+                }
+                #quill-media-context-menu div:hover {
+                    background-color: #f8fafc !important;
+                }
+            `;
+            document.head.appendChild(style);
 
-        const uiWrapper = document.createElement('div');
-        uiWrapper.id = 'quill-custom-media-ui';
-        uiWrapper.innerHTML = `
-            <div id="quill-media-context-menu" style="display:none; position:fixed; background:#fff; border:1px solid #ccc; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius:4px; z-index:10000; padding:4px 0; font-size:13px; min-width:130px;">
-                <div id="menu-item-edit-media" style="padding:8px 12px; cursor:pointer; color:#333; transition: background 0.2s;">⚙️ 미디어 크기 변경</div>
-            </div>
+            const uiWrapper = document.createElement('div');
+            uiWrapper.id = 'quill-custom-media-ui';
+            uiWrapper.innerHTML = `
+                <div id="quill-media-context-menu" style="display:none; position:fixed; background:#fff; border:1px solid #e2e8f0; box-shadow: 0 10px 15px rgba(0,0,0,0.1); border-radius:8px; z-index:10000; font-size:13px; min-width:140px; overflow:hidden;">
+                    <div id="menu-item-edit-media" style="padding:12px 16px; cursor:pointer; color:#334155; font-weight:500; transition: background 0.2s;">⚙️ 미디어 크기 변경</div>
+                    <div id="menu-item-delete-media" style="padding:12px 16px; cursor:pointer; color:#ef4444; font-weight:600; border-top: 1px solid #f1f5f9; transition: background 0.2s;">🗑️ 미디어 완전 삭제</div>
+                </div>
 
-            <div id="quill-media-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:10001; align-items:center; justify-content:center; font-family:sans-serif;">
-                <div style="background:#fff; padding:24px; border-radius:12px; width:320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-                    <h4 style="margin:0 0 15px 0; color:#1a73e8; font-size: 16px; text-align:center;" id="media-modal-title">🖼️ 미디어 설정</h4>
-                    
-                    <div id="media-modal-tab-bar" style="display:flex; background:#f1f3f4; padding:4px; border-radius:8px; margin-bottom:16px;">
-                        <button type="button" id="tab-btn-file" style="flex:1; border:none; padding:8px; font-size:13px; font-weight:bold; border-radius:6px; cursor:pointer; background:#fff; color:#1a73e8; transition:all 0.2s;">📁 파일 업로드</button>
-                        <button type="button" id="tab-btn-url" style="flex:1; border:none; padding:8px; font-size:13px; font-weight:bold; border-radius:6px; cursor:pointer; background:transparent; color:#5f6368; transition:all 0.2s;">🔗 웹 링크 입력</button>
-                    </div>
-
-                    <div id="media-modal-file-wrapper" style="margin-bottom: 16px;">
-                        <label style="font-size:12px; color:#666; display:block; margin-bottom:6px; font-weight:bold;">로컬 파일 선택</label>
-                        <input type="file" id="media-modal-file-input" style="font-size:12px; width:100%; border:1px solid #ddd; padding:6px; border-radius:6px; background:#fafafa; box-sizing:border-box;">
-                    </div>
-
-                    <div id="media-modal-url-wrapper" style="margin-bottom: 16px; display:none;">
-                        <label style="font-size:12px; color:#666; display:block; margin-bottom:6px; font-weight:bold;">인터넷 주소 (URL)</label>
-                        <input type="url" id="media-modal-url-input" placeholder="https://..." style="font-size:13px; width:100%; border:1px solid #ddd; padding:8px; border-radius:6px; box-sizing:border-box; outline:none;">
-                    </div>
-
-                    <div style="background:#f8fafc; padding:12px; border-radius:8px; margin-bottom:16px; border:1px solid #edf2f7;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <label style="font-size:13px; color:#4a5568; font-weight:bold;">가로 크기 (px)</label>
-                            <input type="text" id="media-modal-width" style="width:130px; padding:6px; border:1px solid #cbd5e1; border-radius:4px; text-align:right;">
+                <div id="quill-media-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:10001; align-items:center; justify-content:center; font-family:sans-serif;">
+                    <div style="background:#fff; padding:24px; border-radius:12px; width:320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                        <h4 style="margin:0 0 15px 0; color:#1a73e8; font-size: 16px; text-align:center;" id="media-modal-title">🖼️ 미디어 설정</h4>
+                        
+                        <div id="media-modal-tab-bar" style="display:flex; background:#f1f3f4; padding:4px; border-radius:8px; margin-bottom:16px;">
+                            <button type="button" id="tab-btn-file" style="flex:1; border:none; padding:8px; font-size:13px; font-weight:bold; border-radius:6px; cursor:pointer; background:#fff; color:#1a73e8; transition:all 0.2s;">📁 파일 업로드</button>
+                            <button type="button" id="tab-btn-url" style="flex:1; border:none; padding:8px; font-size:13px; font-weight:bold; border-radius:6px; cursor:pointer; background:transparent; color:#5f6368; transition:all 0.2s;">🔗 웹 링크 입력</button>
                         </div>
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <label style="font-size:13px; color:#4a5568; font-weight:bold;">세로 크기 (px)</label>
-                            <input type="text" id="media-modal-height" style="width:130px; padding:6px; border:1px solid #cbd5e1; border-radius:4px; text-align:right;">
+
+                        <div id="media-modal-file-wrapper" style="margin-bottom: 16px;">
+                            <label style="font-size:12px; color:#666; display:block; margin-bottom:6px; font-weight:bold;">로컬 파일 선택</label>
+                            <input type="file" id="media-modal-file-input" style="font-size:12px; width:100%; border:1px solid #ddd; padding:6px; border-radius:6px; background:#fafafa; box-sizing:border-box;">
                         </div>
-                        <div style="font-size:12px; color:#4a5568; margin-top:6px;">
-                            <label style="cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none;">
-                                <input type="checkbox" id="media-modal-lock" checked> 🔒 종횡 비율 유지하기
-                            </label>
+
+                        <div id="media-modal-url-wrapper" style="margin-bottom: 16px; display:none;">
+                            <label style="font-size:12px; color:#666; display:block; margin-bottom:6px; font-weight:bold;">인터넷 주소 (URL)</label>
+                            <input type="url" id="media-modal-url-input" placeholder="https://..." style="font-size:13px; width:100%; border:1px solid #ddd; padding:8px; border-radius:6px; box-sizing:border-box; outline:none;">
                         </div>
-                    </div>
-                    
-                    <div style="display:flex; justify-content:flex-end; gap:8px;">
-                        <button type="button" id="media-modal-cancel" style="padding:8px 14px; border:1px solid #cbd5e1; background:#fff; color:#475569; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500;">취소</button>
-                        <button type="button" id="media-modal-confirm" style="padding:8px 14px; border:none; background:#1a73e8; color:#fff; border-radius:6px; cursor:pointer; font-size:13px; font-weight:bold;">적용하기</button>
+
+                        <div style="background:#f8fafc; padding:12px; border-radius:8px; margin-bottom:16px; border:1px solid #edf2f7;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <label style="font-size:13px; color:#4a5568; font-weight:bold;">가로 크기 (px)</label>
+                                <input type="text" id="media-modal-width" style="width:130px; padding:6px; border:1px solid #cbd5e1; border-radius:4px; text-align:right;">
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <label style="font-size:13px; color:#4a5568; font-weight:bold;">세로 크기 (px)</label>
+                                <input type="text" id="media-modal-height" style="width:130px; padding:6px; border:1px solid #cbd5e1; border-radius:4px; text-align:right;">
+                            </div>
+                            <div style="font-size:12px; color:#4a5568; margin-top:6px;">
+                                <label style="cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none;">
+                                    <input type="checkbox" id="media-modal-lock" checked> 🔒 종횡 비율 유지하기
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div style="display:flex; justify-content:flex-end; gap:8px;">
+                            <button type="button" id="media-modal-cancel" style="padding:8px 14px; border:1px solid #cbd5e1; background:#fff; color:#475569; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500;">취소</button>
+                            <button type="button" id="media-modal-confirm" style="padding:8px 14px; border:none; background:#1a73e8; color:#fff; border-radius:6px; cursor:pointer; font-size:13px; font-weight:bold;">적용하기</button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
-        document.body.appendChild(uiWrapper);
+            `;
+            document.body.appendChild(uiWrapper);
 
-        const menuBtn = document.getElementById('menu-item-edit-media');
-        menuBtn.onmouseover = () => menuBtn.style.background = '#f1f3f4';
-        menuBtn.onmouseout = () => menuBtn.style.background = '#fff';
-
-        // 공유 메뉴 클릭 시 현재 활성화된 에디터 인스턴스의 핸들러를 실행하도록 단 한 번 연결
-        menuBtn.onclick = () => {
-            document.getElementById('quill-media-context-menu').style.display = 'none';
-            if (NoticeEditor.activeInstance) {
-                NoticeEditor.activeInstance.triggerEditModalFromMenu();
-            }
-        };
+            // 공용 컨텍스트 메뉴 이벤트 연결
+            document.getElementById('menu-item-edit-media').onclick = () => {
+                document.getElementById('quill-media-context-menu').style.display = 'none';
+                if (NoticeEditor.activeInstance) NoticeEditor.activeInstance.triggerEditModalFromMenu();
+            };
+            
+            document.getElementById('menu-item-delete-media').onclick = () => {
+                document.getElementById('quill-media-context-menu').style.display = 'none';
+                if (NoticeEditor.activeInstance) NoticeEditor.activeInstance.deleteTargetMedia();
+            };
+        }
     }
 
-    // 📌 각 인스턴스 전용 UI (ID 중복을 막기 위해 핵심 요소들을 class 기반으로 변경)
     renderUI() {
         this.container.style.cssText = "padding: 15px; margin-bottom: 20px; background: #fdfdfd; border: 1px dashed #1a73e8; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;";
         this.container.innerHTML = `
@@ -133,7 +147,6 @@ export class NoticeEditor {
     initQuill() {
         if (!window.Quill) return;
 
-        // 💡 [해결] 전체 문서가 아닌, 현재 인스턴스 컨테이너 내부의 에디터 요소를 정확히 지목하여 할당
         const targetEditorTarget = this.container.querySelector('.new-notice-editor');
         
         this.quill = new Quill(targetEditorTarget, {
@@ -329,7 +342,6 @@ export class NoticeEditor {
         h.style.background = disabled ? "#f1f3f4" : "#fff";
     }
 
-    // 전역 공유 메뉴 클릭 시 실행될 인스턴스 전용 라우터
     triggerEditModalFromMenu() {
         const node = this.modalState.targetNode;
         if (!node) return;
@@ -339,23 +351,51 @@ export class NoticeEditor {
         this.openMediaModal('edit', this.modalState.type, node, currentW, currentH);
     }
 
+    // 💡 [새 기능] 커스텀 메뉴에서 [미디어 삭제] 클릭 시 실행될 함수
+    deleteTargetMedia() {
+        const node = this.modalState.targetNode;
+        if (!node) return;
+        
+        // Quill 에디터의 내부 상태(Delta)에 맞춰 안정적으로 삭제
+        if (window.Quill) {
+            const blot = window.Quill.find(node);
+            if (blot) {
+                blot.deleteAt(0, blot.length());
+                return;
+            }
+        }
+        node.remove(); // 최후의 백업
+    }
+
     initEvents() {
         const contextMenu = document.getElementById('quill-media-context-menu');
 
-        // 🖱️ 우클릭 크기 조절 메뉴 바인딩 (현재 컨테이너의 에디터에만 한정되도록 연결)
+        // 🖱️ 우클릭 감지 (CSS 트릭을 활용한 좌표 기반 타겟 검출)
         const editorContent = this.container.querySelector('.ql-editor');
         editorContent.addEventListener('contextmenu', (e) => {
-            if (['IMG', 'IFRAME', 'VIDEO'].includes(e.target.tagName)) {
-                e.preventDefault(); 
-                
-                // 💡 [해결] 우클릭이 발생한 이 에디터 객체를 전역 활성 인스턴스로 등록
-                NoticeEditor.activeInstance = this;
+            const medias = editorContent.querySelectorAll('img, iframe, video');
+            let targetMedia = null;
+            
+            for (let media of medias) {
+                const rect = media.getBoundingClientRect();
+                // 사용자가 해당 이미지/동영상 위에서 우클릭했는지 좌표 계산
+                if (e.clientX >= rect.left - 1 && e.clientX <= rect.right + 1 &&
+                    e.clientY >= rect.top - 1 && e.clientY <= rect.bottom + 1) {
+                    targetMedia = media;
+                    break;
+                }
+            }
 
+            if (targetMedia) {
+                e.preventDefault(); 
+                NoticeEditor.activeInstance = this;
+                
                 contextMenu.style.display = 'block';
                 contextMenu.style.left = e.clientX + 'px';
                 contextMenu.style.top = e.clientY + 'px';
-                this.modalState.targetNode = e.target;
-                this.modalState.type = e.target.tagName === 'IMG' ? 'image' : 'video';
+                
+                this.modalState.targetNode = targetMedia;
+                this.modalState.type = targetMedia.tagName === 'IMG' ? 'image' : 'video';
             }
         });
 
@@ -363,7 +403,7 @@ export class NoticeEditor {
             if (!e.target.closest('#quill-media-context-menu')) contextMenu.style.display = 'none';
         });
 
-        // 💡 [핵심 기능] 복사+붙여넣기(Ctrl+V) 자동 업로드 바인딩
+        // 💡 복사+붙여넣기(Ctrl+V) 시 자동 업로드 처리
         this.quill.root.addEventListener('paste', async (e) => {
             const clipboardData = e.clipboardData || window.clipboardData;
             if (!clipboardData || !clipboardData.items) return;
@@ -415,7 +455,6 @@ export class NoticeEditor {
             }
         });
 
-        // 폼 등록 및 취소 버튼 등 일반 UI 이벤트 바인딩도 고유 컨테이너 기반으로 수정
         this.container.querySelector('.btn-add-link-row').addEventListener('click', () => this.addLinkRow());
         this.container.querySelector('.link-inputs-container').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-remove-link-row')) e.target.closest('.link-input-row').remove();
