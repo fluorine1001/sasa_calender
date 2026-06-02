@@ -21,6 +21,15 @@ function initSasadomi() {
         if (user) {
             currentUid = user.uid;
             await checkSasaIntegrationStatus();
+            
+            // 💡 [버그 수정 1] Firebase 인증 완료 시점 처리
+            // 인증이 완료되었을 때 현재 열려있는 탭이 '사사도미'라면 지연된 크롤링을 즉시 실행합니다.
+            const currentTab = localStorage.getItem('sasa_last_active_tab');
+            if (currentTab === 'sasadomi' && savedSasaId && savedSasaToken) {
+                console.log("[Sasadomi] 인증 완료. 지연된 데이터 크롤링을 시작합니다.");
+                loadSasadomiData();
+                loadApplicationData();
+            }
         } else {
             currentUid = null;
             savedSasaId = null;
@@ -629,6 +638,15 @@ function setupApplicationButtons() {
 // ==========================================
 window.triggerSasaTabLoad = function() {
     console.log("[Hook] 사사도미 탭 진입 감지됨. 데이터 스크래핑 런타임 시작.");
+    
+    // 💡 [버그 수정 2] 인증 대기 로직 추가
+    // 아직 Firebase 인증이 안 끝났다면(currentUid가 없다면) 에러를 내지 않고 대기시킵니다.
+    // 인증이 끝나면 위의 onAuthStateChanged가 알아서 크롤링을 실행해 줍니다.
+    if (!currentUid) {
+        console.log("[Hook] Firebase 인증 대기 중...");
+        return; 
+    }
+
     checkSasaIntegrationStatus().then(() => {
         if (savedSasaId && savedSasaToken) {
             loadSasadomiData();      
