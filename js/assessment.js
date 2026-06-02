@@ -5,7 +5,7 @@ import {
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 assessment.js 로드 완료 (고유 ID 바인딩 시스템 적용으로 충돌 해결)");
+console.log("🚀 [Assessment Debug] assessment.js 파일 로드 시작");
 
 let currentUid = null;
 let isCurrentUserAdmin = false;
@@ -26,8 +26,10 @@ const defaultLatexGuide = [
     { category: "1. 구별 기호 및 그리스 문자", inputs: [{ syntax: "\\dot{a}, \\ddot{a}", desc: "문자 위 점 기호", example: "$\\dot{a}, \\ddot{a}$" }] }
 ];
 
-// 🔒 초기화 실행 함수 (DOMContentLoaded 타이밍 이슈 방지 안전장치)
+// 🔒 초기화 실행 함수
 function initializeAssessmentModule() {
+    console.log("🎬 [Assessment Debug] initializeAssessmentModule() 실행됨");
+
     if (!document.getElementById('accordion-custom-styles')) {
         const style = document.createElement('style');
         style.id = 'accordion-custom-styles';
@@ -60,18 +62,46 @@ function initializeAssessmentModule() {
             .badge-private { background: #fff5f5; color: #e53e3e; }
         `;
         document.head.appendChild(style);
+        console.log("🎨 [Assessment Debug] 커스텀 CSS 스타일 주입 완료");
     }
+
+    // 🔍 [핵심 디버깅] HTML 안에 ID들이 정상적으로 존재하는지 교차 검증 검사기
+    console.log("🔍 [Assessment Debug] 현재 HTML 문서 내 주요 ID 연결 상태 점검...");
+    const targetIDs = [
+        'btn-user-settings', 'assessment-settings-modal', 'assessment-btn-close-x', 
+        'assessment-btn-save', 'assessment-btn-reset', 'btn-admin-add', 
+        'assessment-tab-editor-view', 'assessment-editor-container', 
+        'assessment-editor-grade-select', 'assessment-editor-public-check', 'evaluation-list'
+    ];
+    
+    targetIDs.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            console.log(`✅ [ID 매칭 성공] "${id}" 요소를 정상적으로 찾았습니다.`, element);
+        } else {
+            console.error(`🚨 [ID 매칭 실패!!] "${id}" 요소가 현재 HTML에 존재하지 않습니다! 관련 기능이 100% 작동하지 않습니다.`);
+            
+            // 혹시 접두사(assessment-)가 빠진 과거 ID가 남아있는지 보조 확인
+            const alternativeId = id.replace('assessment-', '').replace('btn-save', 'btn-close-settings').replace('btn-reset', 'btn-reset-settings').replace('btn-close-x', 'btn-close-settings-x');
+            if (document.getElementById(alternativeId)) {
+                console.warn(`💡 [힌트] "${id}" 대신 접두사가 없는 구형 ID "${alternativeId}"가 HTML에 남아있습니다. HTML 태그의 ID를 수정하셔야 합니다!`);
+            }
+        }
+    });
 
     loadConfigFromStorage();
 
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
+        console.log("🔐 [Assessment Debug] 인증 상태 감지됨:", user ? `UID: ${user.uid}` : "로그아웃 상태");
         if (user) {
             currentUid = user.uid;
             try {
                 const userDoc = await getDoc(doc(db, `users/${currentUid}`));
                 isCurrentUserAdmin = (userDoc.exists() && userDoc.data().isAdmin === true);
+                console.log(`🛡️ [Assessment Debug] 관리자 여부 검증 결과: ${isCurrentUserAdmin}`);
             } catch (e) { 
+                console.error("🚨 관리자 정보 획득 실패:", e);
                 isCurrentUserAdmin = false; 
             }
             
@@ -90,152 +120,225 @@ function initializeAssessmentModule() {
         }
     });
 
-    document.getElementById('search-input')?.addEventListener('input', renderList);
+    document.getElementById('search-input')?.addEventListener('input', () => {
+        console.log("⌨️ 검색어 입력 감지됨");
+        renderList();
+    });
 
     // ==========================================
-    // ⚙️ 고유 ID가 적용된 맞춤 설정 모달창 버튼 제어
+    // ⚙️ 맞춤 설정 모달창 버튼 이벤트 바인딩 및 로그
     // ==========================================
     const settingsModal = document.getElementById('assessment-settings-modal');
 
-    // 1. 설정 창 열기
-    document.getElementById('btn-user-settings')?.addEventListener('click', () => {
-        renderSettingsModalTree();
-        if (settingsModal) settingsModal.style.display = 'flex';
-    });
-
-    // 2. 상단 ✕ 버튼 이벤트 바인딩
-    document.getElementById('assessment-btn-close-x')?.addEventListener('click', () => {
-        if (settingsModal) settingsModal.style.display = 'none';
-    });
-
-    // 3. 설정 저장 및 닫기 버튼 (중복 완벽 해결)
-    document.getElementById('assessment-btn-save')?.addEventListener('click', () => {
-        document.querySelectorAll('.setting-grade-visible').forEach(chk => {
-            const gradeKey = chk.dataset.grade;
-            if (gradeSettings[gradeKey]) gradeSettings[gradeKey].visible = chk.checked;
-        });
-
-        document.querySelectorAll('.settings-item').forEach(item => {
-            const targetChk = item.querySelector('.setting-visible');
-            const targetInput = item.querySelector('.setting-priority');
-            if (!targetChk || !targetInput) return;
-            
-            const docId = targetChk.dataset.id;
-            let targetObject = userSettings.find(s => s.id === docId);
-            if (!targetObject) {
-                targetObject = { id: docId };
-                userSettings.push(targetObject);
+    // 1. 설정 창 열기 버튼
+    const btnUserSettings = document.getElementById('btn-user-settings');
+    if (btnUserSettings) {
+        btnUserSettings.addEventListener('click', () => {
+            console.log("🔘 [클릭 로그] '맞춤 설정(톱니바퀴)' 버튼이 클릭되었습니다.");
+            renderSettingsModalTree();
+            if (settingsModal) {
+                settingsModal.style.display = 'flex';
+                console.log("🔓 맞춤 설정 모달창 노출 (display = flex)");
+            } else {
+                console.error("🚨 settingsModal 요소가 없어서 창을 열 수 없습니다.");
             }
-            targetObject.visible = targetChk.checked;
-            targetObject.priority = parseInt(targetInput.value) || 1;
         });
+    }
 
-        flushConfigToStorage();
-        renderList();
-        if (settingsModal) settingsModal.style.display = 'none';
-        alert("✅ 맞춤 설정이 성공적으로 저장되었습니다.");
-    });
+    // 2. 상단 ✕ 버튼
+    const btnCloseX = document.getElementById('assessment-btn-close-x') || document.getElementById('btn-close-settings-x');
+    if (btnCloseX) {
+        btnCloseX.addEventListener('click', () => {
+            console.log("🔘 [클릭 로그] 모달 상단 '✕' 닫기 버튼이 클릭되었습니다.");
+            if (settingsModal) settingsModal.style.display = 'none';
+        });
+    }
 
-    // 4. 기본값 초기화 버튼 (중복 완벽 해결)
-    document.getElementById('assessment-btn-reset')?.addEventListener('click', () => {
-        if (!confirm("모든 설정을 초기화하고 기본 상태로 되돌리시겠습니까?")) return;
-        gradeSettings = {
-            '1': { visible: true, sort: 'priority', expanded: true },
-            '2': { visible: true, sort: 'priority', expanded: true },
-            '3': { visible: true, sort: 'priority', expanded: true }
-        };
-        userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
-        
-        flushConfigToStorage();
-        renderSettingsModalTree(); 
-        renderList();
-        alert("🔄 설정이 초기화되었습니다. '설정 저장 및 닫기'를 누르면 최종 반영됩니다.");
-    });
+    // 3. 설정 저장 및 닫기 버튼
+    const btnSave = document.getElementById('assessment-btn-save') || document.getElementById('btn-close-settings');
+    if (btnSave) {
+        btnSave.addEventListener('click', () => {
+            console.log("🔘 [클릭 로그] '설정 저장 및 닫기' 버튼이 클릭되었습니다.");
+            
+            document.querySelectorAll('.setting-grade-visible').forEach(chk => {
+                const gradeKey = chk.dataset.grade;
+                if (gradeSettings[gradeKey]) gradeSettings[gradeKey].visible = chk.checked;
+            });
+
+            document.querySelectorAll('.settings-item').forEach(item => {
+                const targetChk = item.querySelector('.setting-visible');
+                const targetInput = item.querySelector('.setting-priority');
+                if (!targetChk || !targetInput) return;
+                
+                const docId = targetChk.dataset.id;
+                let targetObject = userSettings.find(s => s.id === docId);
+                if (!targetObject) {
+                    targetObject = { id: docId };
+                    userSettings.push(targetObject);
+                }
+                targetObject.visible = targetChk.checked;
+                targetObject.priority = parseInt(targetInput.value) || 1;
+            });
+
+            flushConfigToStorage();
+            renderList();
+            if (settingsModal) settingsModal.style.display = 'none';
+            alert("✅ 맞춤 설정이 성공적으로 저장되었습니다.");
+            console.log("💾 맞춤 설정 로컬 스토리지 저장 및 반영 완료");
+        });
+    }
+
+    // 4. 기본값 초기화 버튼
+    const btnReset = document.getElementById('assessment-btn-reset') || document.getElementById('btn-reset-settings');
+    if (btnReset) {
+        btnReset.addEventListener('click', () => {
+            console.log("🔘 [클릭 로그] '기본값 초기화' 버튼이 클릭되었습니다.");
+            if (!confirm("모든 설정을 초기화하고 기본 상태로 되돌리시겠습니까?")) return;
+            gradeSettings = {
+                '1': { visible: true, sort: 'priority', expanded: true },
+                '2': { visible: true, sort: 'priority', expanded: true },
+                '3': { visible: true, sort: 'priority', expanded: true }
+            };
+            userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
+            
+            flushConfigToStorage();
+            renderSettingsModalTree(); 
+            renderList();
+            alert("🔄 설정이 초기화되었습니다. '설정 저장 및 닫기'를 누르면 최종 반영됩니다.");
+        });
+    }
 
     // ==========================================
-    // ➕ "새 계획 추가" 클릭 이벤트 (고유 ID 연동)
+    // ➕ "새 계획 추가" 클릭 이벤트 및 로그
     // ==========================================
-    document.getElementById('btn-admin-add')?.addEventListener('click', () => {
-        editingId = null;
-        if (editorInstance && typeof editorInstance.reset === 'function') {
-            editorInstance.reset();
-        }
-        
-        const gradeSelect = document.getElementById('assessment-editor-grade-select');
-        const publicCheck = document.getElementById('assessment-editor-public-check');
-        if (gradeSelect) gradeSelect.value = "1";
-        if (publicCheck) publicCheck.checked = true;
-        
-        switchToEditorView(); 
-    });
+    const btnAdminAdd = document.getElementById('btn-admin-add');
+    if (btnAdminAdd) {
+        btnAdminAdd.addEventListener('click', () => {
+            console.log("🔘 [클릭 로그] '[➕ 새 계획 추가]' 버튼이 클릭되었습니다.");
+            editingId = null;
+            if (editorInstance && typeof editorInstance.reset === 'function') {
+                editorInstance.reset();
+                console.log("🔄 에디터 인스턴스 폼 초기화 완료");
+            } else {
+                console.warn("⚠️ 에디터 인스턴스가 존재하지 않거나 reset 메소드가 없습니다.");
+            }
+            
+            const gradeSelect = document.getElementById('assessment-editor-grade-select') || document.getElementById('editor-grade-select');
+            const publicCheck = document.getElementById('assessment-editor-public-check') || document.getElementById('editor-public-check');
+            
+            if (gradeSelect) {
+                gradeSelect.value = "1";
+                console.log("🎯 대상 학년 셀렉트 박스 기본값 '1학년' 강제 지정 성공");
+            } else {
+                console.error("🚨 대상 학년 셀렉트 박스(ID: assessment-editor-grade-select)를 찾을 수 없습니다.");
+            }
+            
+            if (publicCheck) publicCheck.checked = true;
+            
+            switchToEditorView(); 
+        });
+    }
 }
 
-// 🛠️ 리치 에디터 라이브러리 연동 (고유 컨테이너 ID 바인딩)
+// 🛠️ 리치 에디터 라이브러리 연동 로그
 function initRichEditorInstance() {
-    if (editorInstance || !document.getElementById('assessment-editor-container')) return;
+    const containerId = document.getElementById('assessment-editor-container') ? 'assessment-editor-container' : 'editor-container';
+    console.log(`✍️ [Assessment Debug] 에디터 초기화 시도중... 대상 컨테이너 ID: "${containerId}"`);
+    
+    if (!document.getElementById(containerId)) {
+        console.error(`🚨 에디터 컨테이너 ID "${containerId}"가 HTML에 없어 초기화가 중단되었습니다.`);
+        return;
+    }
 
-    // 중복 방지를 위해 고유 컨테이너 ID 'assessment-editor-container' 사용
-    editorInstance = new NoticeEditor('assessment-editor-container', defaultLatexGuide, {
-        onSubmit: async (data) => {
-            const gradeSelect = document.getElementById('assessment-editor-grade-select');
-            const publicCheck = document.getElementById('assessment-editor-public-check');
-            
-            const selectedGrade = gradeSelect ? gradeSelect.value : "1";
-            const isPublicChecked = publicCheck ? publicCheck.checked : true;
+    if (editorInstance) {
+        console.log("✨ 에디터 인스턴스가 이미 존재하므로 재지정하지 않고 건너뜁니다.");
+        return;
+    }
 
-            const payload = {
-                grade: selectedGrade,
-                title: data.title,
-                content: data.bodyHtml, 
-                files: data.files || [],  
-                isPublic: isPublicChecked,
-                updatedAt: serverTimestamp()
-            };
+    try {
+        editorInstance = new NoticeEditor(containerId, defaultLatexGuide, {
+            onSubmit: async (data) => {
+                console.log("💾 에디터 전송(Submit) 이벤트 트리거됨", data);
+                const gradeSelect = document.getElementById('assessment-editor-grade-select') || document.getElementById('editor-grade-select');
+                const publicCheck = document.getElementById('assessment-editor-public-check') || document.getElementById('editor-public-check');
+                
+                const selectedGrade = gradeSelect ? gradeSelect.value : "1";
+                const isPublicChecked = publicCheck ? publicCheck.checked : true;
 
-            try {
-                if (editingId) {
-                    await updateDoc(doc(db, 'assessments', editingId), payload);
-                } else {
-                    const generatedRef = doc(collection(db, 'assessments'));
-                    payload.id = generatedRef.id;
-                    payload.createdAt = serverTimestamp();
-                    await setDoc(generatedRef, payload);
+                const payload = {
+                    grade: selectedGrade,
+                    title: data.title,
+                    content: data.bodyHtml, 
+                    files: data.files || [],  
+                    isPublic: isPublicChecked,
+                    updatedAt: serverTimestamp()
+                };
+
+                try {
+                    if (editingId) {
+                        await updateDoc(doc(db, 'assessments', editingId), payload);
+                        console.log(`📝 기존 문서 수정 완료 ID: ${editingId}`);
+                    } else {
+                        const generatedRef = doc(collection(db, 'assessments'));
+                        payload.id = generatedRef.id;
+                        payload.createdAt = serverTimestamp();
+                        await setDoc(generatedRef, payload);
+                        console.log(`✨ 신규 문서 추가 완료 생성된 ID: ${payload.id}`);
+                    }
+                    editingId = null;
+                    if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
+                    switchToListView();
+                    alert(`✅ 성공적으로 저장되어 ${selectedGrade}학년 계획에 등록되었습니다.`);
+                } catch (err) {
+                    console.error("🚨 Firestore 저장 도중 에러 발생:", err);
+                    alert("❌ 저장 도중 문제가 발생했습니다.");
                 }
+            },
+            onCancel: () => {
+                console.log("❌ 에디터 작성 취소됨");
                 editingId = null;
                 if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
                 switchToListView();
-                alert(`✅ 성공적으로 저장되어 ${selectedGrade}학년 계획에 등록되었습니다.`);
-            } catch (err) {
-                console.error("Firestore 트랜잭션 에러:", err);
-                alert("❌ 저장 도중 문제가 발생했습니다.");
             }
-        },
-        onCancel: () => {
-            editingId = null;
-            if (editorInstance && typeof editorInstance.reset === 'function') editorInstance.reset();
-            switchToListView();
-        }
-    });
+        });
+        console.log("✅ 리치 에디터 인스턴스 연결 성공!");
+    } catch (e) {
+        console.error("🚨 NoticeEditor 인스턴스 생성 중 크리티컬 에러 발생:", e);
+    }
 }
 
 function switchToListView() {
+    console.log("🔄 [화면 전환] 리스트 뷰 활성화 요청");
     const listView = document.getElementById('tab-list-view');
-    const editorView = document.getElementById('assessment-tab-editor-view');
+    const editorView = document.getElementById('assessment-tab-editor-view') || document.getElementById('tab-editor-view');
+    
     if (listView) listView.style.display = 'block';
     if (editorView) editorView.style.display = 'none';
 }
 
 function switchToEditorView() {
+    console.log("🔄 [화면 전환] 에디터 작성 폼 뷰 활성화 요청");
     const listView = document.getElementById('tab-list-view');
-    const editorView = document.getElementById('assessment-tab-editor-view');
-    if (listView) listView.style.display = 'none';
-    if (editorView) editorView.style.display = 'block';
+    const editorView = document.getElementById('assessment-tab-editor-view') || document.getElementById('tab-editor-view');
+    
+    if (listView) {
+        listView.style.display = 'none';
+        console.log("🙈 리스트 뷰 숨김 완료 (display = none)");
+    }
+    if (editorView) {
+        editorView.style.display = 'block';
+        console.log("👀 에디터 뷰 노출 완료 (display = block)");
+    } else {
+        console.error("🚨 에디터 뷰 엘리먼트가 존재하지 않아 노출 처리에 실패했습니다!");
+    }
 }
 
 function startSnapshotSync() {
+    console.log("📡 [Assessment Debug] Firestore 실시간 동기화 스냅샷 시작");
     if (unsubscribeAssessments) unsubscribeAssessments();
     
     unsubscribeAssessments = onSnapshot(collection(db, 'assessments'), (snapshot) => {
+        console.log(`📥 Firestore에서 ${snapshot.size}개의 문서 수신함`);
         subjects = [];
         snapshot.forEach((doc) => {
             subjects.push({ id: doc.id, ...doc.data() });
@@ -247,6 +350,8 @@ function startSnapshotSync() {
             }
         });
         renderList();
+    }, (error) => {
+        console.error("🚨 스냅샷 수신 중 Firestore 보안 규칙 오류 또는 끊김 발생:", error);
     });
 }
 
@@ -255,6 +360,7 @@ function loadConfigFromStorage() {
     if (rawG) { try { gradeSettings = { ...gradeSettings, ...JSON.parse(rawG) }; } catch (e) {} }
     const rawU = localStorage.getItem('sasa_assessment_user_settings');
     if (rawU) { try { userSettings = JSON.parse(rawU); } catch (e) {} }
+    console.log("⚙️ 로컬 스토리지 설정값 로드 성공");
 }
 
 function flushConfigToStorage() {
@@ -264,7 +370,10 @@ function flushConfigToStorage() {
 
 function renderList() {
     const mainViewTarget = document.getElementById('evaluation-list');
-    if (!mainViewTarget) return;
+    if (!mainViewTarget) {
+        console.error("🚨 'evaluation-list' 결과 컨테이너 영역이 HTML에 없습니다. 목록을 그릴 수 없습니다.");
+        return;
+    }
 
     const filterKeyword = document.getElementById('search-input')?.value.toLowerCase() || '';
     let combinedHtml = '';
@@ -459,13 +568,14 @@ window.toggleItemAccordion = function(docId) {
 };
 
 window.editAssessmentItem = function(docId) {
+    console.log(`📝 [Assessment Debug] 항목 수정 요청됨 ID: ${docId}`);
     const object = subjects.find(sub => sub.id === docId);
     if (!object) return;
 
     editingId = docId;
     
-    const gradeSelect = document.getElementById('assessment-editor-grade-select');
-    const publicCheck = document.getElementById('assessment-editor-public-check');
+    const gradeSelect = document.getElementById('assessment-editor-grade-select') || document.getElementById('editor-grade-select');
+    const publicCheck = document.getElementById('assessment-editor-public-check') || document.getElementById('editor-public-check');
     if (gradeSelect) gradeSelect.value = object.grade || '1';
     if (publicCheck) publicCheck.checked = object.isPublic !== false;
 
@@ -480,12 +590,13 @@ window.deleteAssessmentItem = async function(docId) {
     if (!confirm("해당 교과 평가 계획을 영구히 삭제하시겠습니까?")) return;
     try {
         await deleteDoc(doc(db, 'assessments', docId));
+        console.log(`🗑️ Firestore 문서 삭제 완료: ${docId}`);
     } catch (err) {
         console.error("Firestore 삭제 실패:", err);
     }
 };
 
-// ⚡ 브라우저 로딩 상태에 맞춰 안전하게 실행 유도
+// ⚡ DOM 상태에 관계없이 안전하게 실행 보장 유도
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeAssessmentModule);
 } else {
