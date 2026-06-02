@@ -636,23 +636,32 @@ function setupApplicationButtons() {
 // ==========================================
 // 🔗 [전역 바인딩] app.js 의 탭 체인저와 가교 연결
 // ==========================================
-window.triggerSasaTabLoad = function() {
+window.triggerSasaTabLoad = async function() {
     console.log("[Hook] 사사도미 탭 진입 감지됨. 데이터 스크래핑 런타임 시작.");
     
-    // 💡 [버그 수정 2] 인증 대기 로직 추가
-    // 아직 Firebase 인증이 안 끝났다면(currentUid가 없다면) 에러를 내지 않고 대기시킵니다.
-    // 인증이 끝나면 위의 onAuthStateChanged가 알아서 크롤링을 실행해 줍니다.
-    if (!currentUid) {
-        console.log("[Hook] Firebase 인증 대기 중...");
-        return; 
-    }
+    const loadingMsg = document.getElementById('sasa-loading-msg');
+    
+    // 1. 로딩 메시지 띄우기
+    if (loadingMsg) loadingMsg.style.display = 'block';
 
-    checkSasaIntegrationStatus().then(() => {
+    try {
+        // 계정 연동 상태 확인 (완료될 때까지 대기)
+        await checkSasaIntegrationStatus();
+        
         if (savedSasaId && savedSasaToken) {
-            loadSasadomiData();      
-            loadApplicationData();   
+            // 2. 두 가지 데이터를 병렬로 모두 불러올 때까지 대기
+            // (주의: 내부 load 함수들이 async 함수이거나 Promise를 반환해야 완벽하게 대기합니다)
+            await Promise.all([
+                loadSasadomiData(),      
+                loadApplicationData()
+            ]);
         }
-    });
+    } catch (error) {
+        console.error("[Sasadomi] 데이터 로딩 중 오류 발생:", error);
+    } finally {
+        // 3. 데이터를 다 불러왔거나 오류가 났어도 로딩 메시지 숨기기
+        if (loadingMsg) loadingMsg.style.display = 'none';
+    }
 };
 
 document.addEventListener('DOMContentLoaded', initSasadomi);
