@@ -172,39 +172,46 @@ html, body, .container, .content {
     display: none !important;
 }
 
-/* 3. [핵심: 세로 적층 UI 변환] 창 크기가 줄어들 때 좌우 분할 구조를 일렬 배치 */
-/* 💡 트리거를 1150px로 넓혀서, 글자가 찌그러지기 전에 선제적으로 아래로 쌓이게 만듭니다. */
+/* ========================================================
+   🚨 [최종 패치] 사사도미 우측 UI(벌점 사유 등) 강제 하단 적층 
+======================================================== */
 @media (max-width: 1150px) {
-    
-    /* 사사도미(#sasadomi) 및 전체 본문 내의 모든 좌우 flex 정렬 레이아웃을 감지하여 세로(Column) 정렬로 강제 전환 */
-    #sasadomi div[style*="display"],
-    .tab-content div[style*="display"],
-    .content div[style*="display"] {
+    /* 1. 사사도미 탭 및 본문 내부의 구조를 무조건 세로 방향(Column)으로 강제 변환 */
+    #sasadomi, 
+    #sasadomi > div,
+    .tab-content.active,
+    .tab-content.active > div, 
+    .content > div {
+        display: flex !important;
         flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 24px !important; /* 위아래 카드 사이의 시원한 여백 확보 */
+        width: 100% !important;
+        gap: 20px !important;
     }
 
-    /* 세로로 쌓인 좌측(신청서) 카드와 우측(벌점 사유) 카드가 가로 너비를 100% 꽉 채우도록 보장 */
-    #sasadomi div[style*="display"] > *,
-    .tab-content div[style*="display"] > *,
-    .content div[style*="display"] > * {
+    /* 2. ⭐️ 핵심: '카드(.card)' 요소들이 가로 공간을 100% 독차지하도록 팽창시킵니다.
+       옆에 남는 공간이 1px도 없게 되므로, 우측 카드는 무조건 다음 줄(하단)로 쫓겨납니다. */
+    #sasadomi .card, 
+    .tab-content .card, 
+    .content .card {
         width: 100% !important;
         max-width: 100% !important;
-        flex: unset !important; /* 기존 태그에 박혀있던 flex: 1 등 가로 균등분할 속성을 완전 무력화 */
-        margin-left: 0 !important;
-        margin-right: 0 !important;
+        min-width: 100% !important;
+        flex: 0 0 100% !important;
+        margin: 0 0 20px 0 !important; /* 좌우 여백 없앰, 아래 여백만 20px */
+        box-sizing: border-box !important;
     }
 
-    /* 벌점 부과 사유 카드 내의 테이블이 부모 박스를 뚫고 나가지 못하도록 안전 조치 */
-    .card, table, thead, tbody, tr, th, td {
+    /* 3. 테이블(표)이 너무 커서 카드를 뚫고 나가는 현상 원천 차단 */
+    .card table, .card thead, .card tbody {
+        width: 100% !important;
         max-width: 100% !important;
     }
 
-    /* 만약 스마트폰 화면에서 테이블 너비가 초과될 경우 화면 전체가 깨지는 대신 카드 내부에서 부드럽게 스크롤되도록 제어 */
-    .card div, .card table {
+    /* 표 안의 내용이 길면, 화면 전체가 망가지지 않고 카드 안에서만 스크롤되도록 보호 */
+    .card > div, 
+    .card table {
         overflow-x: auto !important;
-        word-break: break-all !important;
+        -webkit-overflow-scrolling: touch !important;
     }
 }
 
