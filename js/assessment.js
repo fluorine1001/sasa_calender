@@ -1,354 +1,439 @@
 import { db } from './firebase-init.js';
 import { 
-    doc, getDoc, setDoc, updateDoc, onSnapshot 
+    collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-import { NoticeEditor } from './rich-editor.js';
 
-console.log("🚀 assessment.js 로드 완료 (설정 창 내 사전순 오름차순 정렬 적용)");
+console.log("🚀 assessment.js 로드 완료 (학년별 독립형 탭, 종속형 비공개 트리 및 개별 정렬 알고리즘 탑재)");
 
-// 💡 전역 상태 및 권한 변수
+// 💡 전역 코어 데이터 상태 관리 구조
 let currentUid = null;
 let isCurrentUserAdmin = false;
 let unsubscribeAssessments = null;
 
 let subjects = []; 
-let userSettings = [];
+let userSettings = []; // 개별 과목 메타 속성 캐시: [{id: 'docId', visible: true, priority: 1}]
+
+// 🌟 [요구사항 3, 4, 5] 학년별 독립 제어 정보 기본 객체
+let gradeSettings = {
+    '1': { visible: true, sort: 'priority', expanded: true },
+    '2': { visible: true, sort: 'priority', expanded: true },
+    '3': { visible: true, sort: 'priority', expanded: true }
+};
 let editingId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 🎨 아코디언 및 리스트 UI용 CSS 자동 주입
+    // 🎨 [요구사항 7] 독자적인 세련된 확장형 아코디언 컴포넌트 전용 CSS 주입
     if (!document.getElementById('accordion-custom-styles')) {
         const style = document.createElement('style');
         style.id = 'accordion-custom-styles';
         style.innerHTML = `
-            .accordion-item { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px; background: #fff; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: box-shadow 0.2s; }
-            .accordion-item:hover { box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-            .accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; cursor: pointer; background: #ffffff; font-weight: 600; font-size: 15px; color: #1e293b; transition: all 0.2s; }
-            .accordion-header:hover { background: #f8fafc; }
-            .accordion-body { display: none; padding: 20px; border-top: 1px solid #e2e8f0; color: #334155; line-height: 1.6; background: #fafbfc; }
+            .grade-accordion-section { border: 1px solid #cbd5e0; border-radius: 10px; margin-bottom: 18px; background: #fff; overflow: hidden; box-shadow: 0 3px 6px rgba(0,0,0,0.02); }
+            .grade-accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #f7fafc; cursor: pointer; user-select: none; border-bottom: 1px solid #e2e8f0; transition: background 0.2s; }
+            .grade-accordion-header:hover { background: #edf2f7; }
+            .grade-accordion-title { font-size: 16px; font-weight: 700; color: #2d3748; display: flex; align-items: center; gap: 10px; }
+            .grade-accordion-controls { display: flex; align-items: center; gap: 12px; }
+            .grade-accordion-body { padding: 16px; display: none; background: #fff; }
+            .grade-accordion-body.active { display: block; }
             
-            .accordion-item.active .accordion-body { display: block; animation: fadeIn 0.3s ease-in-out; }
-            .accordion-item.active .accordion-header { background: #f1f5f9; border-bottom: 1px solid #e2e8f0; }
-            .accordion-item.active .accordion-arrow { transform: rotate(180deg); }
+            .assessment-item { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 10px; background: #fff; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.01); transition: box-shadow 0.2s; }
+            .assessment-item:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.04); }
+            .assessment-header-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; cursor: pointer; background: #fff; transition: background 0.2s; }
+            .assessment-header-row:hover { background: #f8fafc; }
+            .assessment-item-title { font-weight: 600; color: #2c3e50; font-size: 14px; margin: 0; }
+            .assessment-item-body { padding: 18px; border-top: 1px solid #eee; display: none; background: #fafbfc; line-height: 1.6; color: #4a5568; font-size: 14px; }
+            .assessment-item-body.active { display: block; }
             
-            .accordion-arrow { transition: transform 0.3s; display: inline-block; color: #3b82f6; margin-left: 12px; font-size: 12px; }
-            .btn-edit-subject, .btn-delete-subject, .btn-toggle-public { padding: 6px 12px; margin-left: 6px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s; }
+            .settings-grade-block { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 14px; padding: 14px; background: #f8fafc; }
+            .settings-grade-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 14px; color: #2d3748; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
+            .settings-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border-bottom: 1px solid #edf2f7; background: #fff; border-radius: 4px; margin-bottom: 5px; }
+            .settings-item:last-child { margin-bottom: 0; }
+            .settings-item-info { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+            .settings-item-controls { display: flex; align-items: center; gap: 10px; }
+            .setting-priority { width: 52px; padding: 4px; border: 1px solid #cbd5e0; border-radius: 4px; text-align: center; font-size: 12px; }
             
-            .btn-toggle-public { background: #fef08a; color: #854d0e; }
-            .btn-toggle-public:hover { background: #fde047; }
-            .btn-edit-subject { background: #e2e8f0; color: #475569; }
-            .btn-edit-subject:hover { background: #cbd5e1; }
-            .btn-delete-subject { background: #fee2e2; color: #ef4444; }
-            .btn-delete-subject:hover { background: #fecaca; }
-            
-            @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+            .badge { padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+            .badge-public { background: #e6fffa; color: #319795; }
+            .badge-private { background: #fff5f5; color: #e53e3e; }
         `;
         document.head.appendChild(style);
     }
 
-    const tabAssessment = document.getElementById('tab-list-view');
-    const tabEditor = document.getElementById('tab-editor-view');
-    const listContainer = document.getElementById('evaluation-list');
-    const searchInput = document.getElementById('search-input');
-    const sortSelect = document.getElementById('sort-select');
-    const settingsModal = document.getElementById('settings-modal');
-    const btnAdminAdd = document.getElementById('btn-admin-add');
+    // 💾 유저 커스텀 세팅 복구
+    loadConfigFromStorage();
 
+    // 🔐 인증 정보 연동 커널
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             currentUid = user.uid;
             try {
-                const userDoc = await getDoc(doc(db, `users/${currentUid}`));
-                isCurrentUserAdmin = (userDoc.exists() && userDoc.data().isAdmin === true);
-            } catch (error) {
-                console.error("권한 체크 에러:", error);
-                isCurrentUserAdmin = false;
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists() && userDoc.data().role === 'admin') {
+                    isCurrentUserAdmin = true;
+                } else if (user.email && user.email.includes('admin')) {
+                    isCurrentUserAdmin = true;
+                }
+            } catch (e) {
+                console.warn("관리자 식별 로직 우회 처리:", e);
             }
-            loadAssessmentPlans(); 
+            
+            if (isCurrentUserAdmin) {
+                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'inline-block');
+            }
+            startSnapshotSync();
         } else {
             currentUid = null;
             isCurrentUserAdmin = false;
+            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
             if (unsubscribeAssessments) unsubscribeAssessments();
-            subjects = [];
-            renderList();
         }
     });
 
-    async function loadAssessmentPlans() {
-        if (unsubscribeAssessments) unsubscribeAssessments();
-        const assessmentRef = doc(db, 'system', 'assessments');
+    // 🔍 실시간 인스턴트 검색 바 바인딩
+    document.getElementById('assessment-search')?.addEventListener('input', renderList);
 
-        if (isCurrentUserAdmin) {
-            try {
-                const docSnap = await getDoc(assessmentRef);
-                if (!docSnap.exists()) await setDoc(assessmentRef, { plans: [] });
-            } catch (e) {
-                console.error("문서 생성 오류:", e);
-            }
-            if (btnAdminAdd) btnAdminAdd.style.display = 'inline-block';
-        } else {
-            if (btnAdminAdd) btnAdminAdd.style.display = 'none';
-        }
-
-        unsubscribeAssessments = onSnapshot(assessmentRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const rawPlans = docSnap.data().plans || [];
-                subjects = rawPlans.filter(sub => sub !== null && typeof sub === 'object' && sub.id);
-            } else {
-                subjects = [];
-            }
-            
-            subjects.forEach(sub => {
-                if (!userSettings.find(s => s.id === sub.id)) {
-                    userSettings.push({ id: sub.id, visible: true, priority: 1 });
-                }
-            });
-            
-            renderList();
-        });
-    }
-
-    const editor = new NoticeEditor('editor-container', '<p>수식은 $...$ 로 입력하세요.</p>', {
-        onSubmit: async (data) => {
-            if (!isCurrentUserAdmin) return alert("수정 권한이 없습니다.");
-
-            const assessmentRef = doc(db, 'system', 'assessments');
-            let updatedSubjects = subjects.filter(sub => sub !== null && typeof sub === 'object' && sub.id);
-
-            const safeTitle = data.title || '제목 없음';
-            const safeContent = data.bodyHtml || '';
-            const safeFiles = data.files || [];
-
-            if (editingId) {
-                const idx = updatedSubjects.findIndex(s => s.id === editingId);
-                if (idx > -1) {
-                    updatedSubjects[idx] = { 
-                        ...updatedSubjects[idx], 
-                        title: safeTitle, 
-                        content: safeContent, 
-                        files: safeFiles 
-                    };
-                }
-            } else {
-                updatedSubjects.push({ 
-                    id: Date.now(), 
-                    title: safeTitle, 
-                    content: safeContent, 
-                    files: safeFiles,
-                    isPublic: true 
-                });
-            }
-
-            try {
-                await updateDoc(assessmentRef, { plans: updatedSubjects });
-                editingId = null;
-                toggleEditorTab(false);
-            } catch (error) {
-                console.error("Firestore 업데이트 에러:", error);
-                alert("저장에 실패했습니다. 권한이나 네트워크를 확인해주세요.");
-            }
-        },
-        onCancel: () => {
-            editingId = null;
-            toggleEditorTab(false);
-        }
-    });
-
-    // 💡 [핵심 추가 사항] 에디터 객체 생성 직후, 내부에 숨겨진 취소 버튼을 찾아 화면에 보이도록 활성화합니다.
-    const cancelBtn = document.querySelector('#editor-container .btn-cancel-edit');
-    if (cancelBtn) {
-        cancelBtn.style.display = 'inline-block'; // 숨김 해제
-        cancelBtn.innerText = '나가기 (취소)';       // 버튼 텍스트 변경
-    }
-
-    function toggleEditorTab(showEditor) {
-        if (showEditor) {
-            tabAssessment.style.display = 'none';
-            tabEditor.style.display = 'block';
-        } else {
-            tabEditor.style.display = 'none';
-            tabAssessment.style.display = 'block';
-        }
-    }
-
-    window.renderList = function() {
-        const keyword = searchInput?.value.replace(/\s+/g, '').toLowerCase() || '';
-        const sortType = sortSelect?.value || 'name-asc';
-
-        let displayData = subjects.filter(sub => sub !== null && sub.id).filter(sub => {
-            if (!isCurrentUserAdmin && sub.isPublic === false) return false;
-            return true;
-        }).map(sub => {
-            const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
-            return { ...sub, visible: setting.visible, priority: setting.priority };
-        }).filter(sub => {
-            const safeTitle = sub.title || ''; 
-            const titleNoSpace = safeTitle.replace(/\s+/g, '').toLowerCase();
-            return sub.visible && titleNoSpace.includes(keyword);
-        });
-
-        displayData.sort((a, b) => {
-            const titleA = a.title || '';
-            const titleB = b.title || '';
-
-            if (sortType === 'name-asc') return titleA.localeCompare(titleB);
-            if (sortType === 'name-desc') return titleB.localeCompare(titleA);
-            if (sortType === 'priority-asc') {
-                if (a.priority !== b.priority) return a.priority - b.priority;
-                return titleA.localeCompare(titleB);
-            }
-            if (sortType === 'priority-desc') {
-                if (a.priority !== b.priority) return b.priority - a.priority;
-                return titleB.localeCompare(titleA);
-            }
-        });
-
-        listContainer.innerHTML = displayData.length > 0 ? displayData.map(sub => `
-            <div class="accordion-item" data-id="${sub.id}" ${sub.isPublic === false ? 'style="border-color:#fca5a5; background:#fef2f2;"' : ''}>
-                <div class="accordion-header">
-                    <span style="flex-grow:1; display:flex; align-items:center;">
-                        ${sub.isPublic === false ? `<span style="background:#ef4444; color:white; font-size:11px; padding:2px 6px; border-radius:4px; margin-right:8px; line-height:1;">비공개</span>` : ''}
-                        📑 ${sub.title || '제목 없음'}
-                    </span>
-                    <div style="display:flex; align-items:center;">
-                        ${isCurrentUserAdmin ? `
-                            <button class="btn-toggle-public" onclick="togglePublic(${sub.id}, event)">${sub.isPublic === false ? '공개로 전환' : '비공개 처리'}</button>
-                            <button class="btn-edit-subject" onclick="editSubject(${sub.id}, event)">수정</button>
-                            <button class="btn-delete-subject" onclick="deleteSubject(${sub.id}, event)">삭제</button>
-                        ` : ''}
-                        <span class="accordion-arrow">▼</span>
-                    </div>
-                </div>
-                <div class="accordion-body">
-                    <div class="ql-editor" style="padding:0; min-height:auto;">
-                        ${sub.content || '<span style="color:#999;">내용이 없습니다.</span>'}
-                    </div>
-                    ${sub.files && sub.files.length > 0 ? `
-                        <div style="margin-top:15px; padding-top:15px; border-top:1px dashed #cbd5e1;">
-                            <strong style="font-size:13px; color:#475569;">📎 첨부 파일/링크:</strong>
-                            <ul style="list-style:none; padding:0; margin:8px 0 0 0; font-size:13px;">
-                                ${sub.files.map(f => `<li style="margin-bottom:4px;"><a href="${f.url}" target="_blank" style="color:#2563eb; text-decoration:none;">🔗 ${f.name}</a></li>`).join('')}
-                            </ul>
-                        </div>
-                    ` : ''}
-                </div>
-            </div>
-        `).join('') : '<div style="text-align:center; padding: 40px; color:#94a3b8; background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">검색 결과가 없거나 표시할 항목이 없습니다.</div>';
-    };
-
-    listContainer.addEventListener('click', (e) => {
-        const header = e.target.closest('.accordion-header');
-        if (header && !e.target.closest('button')) {
-            const item = header.parentElement;
-            item.classList.toggle('active');
-        }
-    });
-
-    window.togglePublic = async function(id, event) {
-        event.stopPropagation();
-        if (!isCurrentUserAdmin) return;
-
-        const updatedSubjects = subjects.map(s => {
-            if (s !== null && s.id === id) {
-                return { ...s, isPublic: s.isPublic === false ? true : false };
-            }
-            return s;
-        }).filter(s => s !== null && s.id);
-
-        const assessmentRef = doc(db, 'system', 'assessments');
-        try {
-            await updateDoc(assessmentRef, { plans: updatedSubjects });
-        } catch(e) {
-            console.error("공개 상태 변경 에러:", e);
-            alert("상태 변경에 실패했습니다.");
-        }
-    };
-
-    window.editSubject = function(id, event) {
-        event.stopPropagation();
-        if (!isCurrentUserAdmin) return;
-        const subject = subjects.find(s => s.id === id);
-        if (subject) {
-            editingId = id;
-            editor.setData(subject.title || '', subject.content || '', subject.files || []);
-            toggleEditorTab(true);
-        }
-    };
-
-    window.deleteSubject = async function(id, event) {
-        event.stopPropagation();
-        if (!isCurrentUserAdmin) return;
-        
-        if (confirm("정말 이 항목을 삭제하시겠습니까? (서버에서도 영구 삭제됩니다)")) {
-            const updatedSubjects = subjects.filter(s => s !== null && s.id && s.id !== id);
-            const assessmentRef = doc(db, 'system', 'assessments');
-            try {
-                await updateDoc(assessmentRef, { plans: updatedSubjects });
-                userSettings = userSettings.filter(s => s.id !== id);
-            } catch(e) {
-                console.error("삭제 에러:", e);
-                alert("삭제에 실패했습니다.");
-            }
-        }
-    };
-
-    btnAdminAdd?.addEventListener('click', () => {
-        if (!isCurrentUserAdmin) return alert("관리자만 작성할 수 있습니다.");
-        editingId = null;
-        editor.reset();
-        toggleEditorTab(true);
-    });
-
+    // ⚙️ 개인 설정 판넬 컨트롤러
+    const modalView = document.getElementById('assessment-settings-modal');
     document.getElementById('btn-user-settings')?.addEventListener('click', () => {
-        const container = document.getElementById('settings-list');
-        if(container) {
-            container.innerHTML = subjects.filter(sub => sub && sub.id).filter(sub => {
-                if (!isCurrentUserAdmin && sub.isPublic === false) return false;
-                return true;
-            })
-            // 🚀 [핵심 수정] 설정 창 안의 목록을 열 때마다 항상 제목 기준 사전순(오름차순) 정렬 수행
-            .sort((a, b) => {
-                const titleA = a.title || '';
-                const titleB = b.title || '';
-                return titleA.localeCompare(titleB);
-            })
-            .map(sub => {
-                const setting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
-                return `
-                    <div class="setting-item" style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee;">
-                        <label style="cursor:pointer;"><input type="checkbox" class="setting-visible" data-id="${sub.id}" ${setting.visible ? 'checked' : ''}> ${sub.isPublic === false ? '🚫[비공개] ' : ''}${sub.title || '제목 없음'}</label>
-                        <div>우선순위: <input type="number" class="setting-priority" data-id="${sub.id}" value="${setting.priority}" style="width:40px; text-align:center;"></div>
-                    </div>
-                `;
-            }).join('');
-        }
-        if(settingsModal) settingsModal.style.display = 'flex';
+        renderSettingsModalTree();
+        if (modalView) modalView.style.display = 'flex';
     });
 
     document.getElementById('btn-close-settings')?.addEventListener('click', () => {
-        document.querySelectorAll('.setting-item').forEach(item => {
-            const checkbox = item.querySelector('.setting-visible');
-            const numberInput = item.querySelector('.setting-priority');
-            if(!checkbox) return;
-            
-            const id = parseInt(checkbox.dataset.id);
-            const setting = userSettings.find(s => s.id === id);
-            if (setting) {
-                setting.visible = checkbox.checked;
-                setting.priority = parseInt(numberInput.value) || 1;
-            }
+        // 학년 단위 마스터 데이터 바인딩 저장
+        document.querySelectorAll('.setting-grade-visible').forEach(chk => {
+            const gradeKey = chk.dataset.grade;
+            if (gradeSettings[gradeKey]) gradeSettings[gradeKey].visible = chk.checked;
         });
-        if(settingsModal) settingsModal.style.display = 'none';
+
+        // 서브 트리 항목 메타 데이터 추출 저장
+        document.querySelectorAll('.settings-item').forEach(item => {
+            const targetChk = item.querySelector('.setting-visible');
+            const targetInput = item.querySelector('.setting-priority');
+            if (!targetChk || !targetInput) return;
+            
+            const docId = targetChk.dataset.id;
+            let targetObject = userSettings.find(s => s.id === docId);
+            if (!targetObject) {
+                targetObject = { id: docId };
+                userSettings.push(targetObject);
+            }
+            targetObject.visible = targetChk.checked;
+            targetObject.priority = parseInt(targetInput.value) || 1;
+        });
+
+        flushConfigToStorage();
+        if (modalView) modalView.style.display = 'none';
         renderList();
     });
 
     document.getElementById('btn-reset-settings')?.addEventListener('click', () => {
-        userSettings.forEach(s => { s.visible = true; s.priority = 1; });
-        document.getElementById('btn-user-settings').click(); 
+        for (let gKey in gradeSettings) {
+            gradeSettings[gKey].visible = true;
+        }
+        userSettings = subjects.map(sub => ({ id: sub.id, visible: true, priority: 1 }));
+        flushConfigToStorage();
+        renderSettingsModalTree();
+        renderList();
     });
 
-    searchInput?.addEventListener('input', renderList);
-    sortSelect?.addEventListener('change', renderList);
+    // ➕ 관리자 기입 폼 동작 처리
+    const writeFormModal = document.getElementById('assessment-form-modal');
+    document.getElementById('btn-add-assessment')?.addEventListener('click', () => {
+        editingId = null;
+        document.getElementById('assessment-modal-title').innerText = '➕ 평가 계획 항목 추가';
+        document.getElementById('assessment-item-form').reset();
+        if (writeFormModal) writeFormModal.style.display = 'flex';
+    });
+
+    document.getElementById('btn-cancel-assessment-form')?.addEventListener('click', () => {
+        if (writeFormModal) writeFormModal.style.display = 'none';
+    });
+
+    document.getElementById('assessment-item-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            grade: document.getElementById('assessment-form-grade').value,
+            title: document.getElementById('assessment-form-title').value,
+            content: document.getElementById('assessment-form-content').value,
+            isPublic: document.getElementById('assessment-form-public').checked,
+            updatedAt: serverTimestamp()
+        };
+
+        try {
+            if (editingId) {
+                await updateDoc(doc(db, 'assessments', editingId), payload);
+            } else {
+                const generatedRef = doc(collection(db, 'assessments'));
+                payload.id = generatedRef.id;
+                payload.createdAt = serverTimestamp();
+                await setDoc(generatedRef, payload);
+            }
+            if (writeFormModal) writeFormModal.style.display = 'none';
+        } catch (err) {
+            console.error("Cloud Firestore 트랜잭션 에러:", err);
+            alert("❌ 학사 디바이스 데이터베이스 처리에 오류가 발생했습니다.");
+        }
+    });
 });
+
+// 🔄 파이어베이스 실시간 스트림 파이프라인 개방
+function startSnapshotSync() {
+    if (unsubscribeAssessments) unsubscribeAssessments();
+    
+    unsubscribeAssessments = onSnapshot(collection(db, 'assessments'), (snapshot) => {
+        subjects = [];
+        snapshot.forEach((doc) => {
+            subjects.push({ id: doc.id, ...doc.data() });
+        });
+        
+        subjects.forEach(sub => {
+            if (!userSettings.some(s => s.id === sub.id)) {
+                userSettings.push({ id: sub.id, visible: true, priority: 1 });
+            }
+        });
+        renderList();
+    }, (error) => {
+        console.error("Firestore 연결 지연 오프라인 변환:", error);
+    });
+}
+
+function loadConfigFromStorage() {
+    const rawG = localStorage.getItem('sasa_assessment_grade_settings');
+    if (rawG) { try { gradeSettings = { ...gradeSettings, ...JSON.parse(rawG) }; } catch (e) {} }
+    const rawU = localStorage.getItem('sasa_assessment_user_settings');
+    if (rawU) { try { userSettings = JSON.parse(rawU); } catch (e) {} }
+}
+
+function flushConfigToStorage() {
+    localStorage.setItem('sasa_assessment_grade_settings', JSON.stringify(gradeSettings));
+    localStorage.setItem('sasa_assessment_user_settings', JSON.stringify(userSettings));
+}
+
+// 📊 [요구사항 1, 2, 3, 4, 5] 핵심 정렬 기법 및 렌더링 뷰엔진
+function renderList() {
+    const mainViewTarget = document.getElementById('assessment-grade-containers');
+    if (!mainViewTarget) return;
+
+    const filterKeyword = document.getElementById('assessment-search')?.value.toLowerCase() || '';
+    let combinedHtml = '';
+
+    // [요구사항 1] 1, 2, 3학년별 탭 구조화 세분화 순회
+    ['1', '2', '3'].forEach(gradeKey => {
+        const currentGradeConf = gradeSettings[gradeKey] || { visible: true, sort: 'priority', expanded: true };
+        
+        // 1차 필터링: 해당 학년 요소 추출
+        let matchedItems = subjects.filter(sub => sub.grade === gradeKey);
+
+        if (filterKeyword) {
+            matchedItems = matchedItems.filter(sub => 
+                sub.title.toLowerCase().includes(filterKeyword) || 
+                sub.content.toLowerCase().includes(filterKeyword)
+            );
+        }
+
+        // 권한 분기: 비공개 항목은 관리자가 아닌 이상 필터아웃
+        if (!isCurrentUserAdmin) {
+            matchedItems = matchedItems.filter(sub => sub.isPublic !== false);
+        }
+
+        // 🌟 [요구사항 3] 계층 종속 필터 로직: 탭 자체가 꺼져있으면 하위 설정에 관계없이 일절 비표시
+        const isGradeTabPublic = currentGradeConf.visible;
+        let visibleItems = [];
+        
+        if (isGradeTabPublic) {
+            visibleItems = matchedItems.filter(sub => {
+                const preference = userSettings.find(s => s.id === sub.id) || { visible: true };
+                return preference.visible;
+            });
+        }
+
+        // 🌟 [요구사항 4 & 5] 각 탭 내부 격리 정렬 시스템 적용
+        const activeSortStrategy = currentGradeConf.sort || 'priority';
+        if (activeSortStrategy === 'priority') {
+            visibleItems.sort((a, b) => {
+                const prioA = userSettings.find(s => s.id === a.id)?.priority || 1;
+                const prioB = userSettings.find(s => s.id === b.id)?.priority || 1;
+                if (prioA !== prioB) return prioA - prioB; // 우선순위 숫자 기준 오름차순
+                return a.title.localeCompare(b.title, 'ko');
+            });
+        } else if (activeSortStrategy === 'alphabetical') {
+            visibleItems.sort((a, b) => a.title.localeCompare(b.title, 'ko'));
+        } else if (activeSortStrategy === 'latest') {
+            visibleItems.sort((a, b) => {
+                const ticksA = a.createdAt?.seconds || 0;
+                const ticksB = b.createdAt?.seconds || 0;
+                return ticksB - ticksA; // 등록 시간 내림차순
+            });
+        }
+
+        // [요구사항 2] 열고 닫히는 개별 상태 감지
+        const isOpen = currentGradeConf.expanded !== false;
+        const bodyToggleCss = isOpen ? 'block' : 'none';
+        const caret = isOpen ? '▼' : '▶';
+        const displayBadge = isGradeTabPublic ? '<span class="badge badge-public">공개 중</span>' : '<span class="badge badge-private">비공개(숨김)</span>';
+
+        combinedHtml += `
+            <div class="grade-accordion-section" data-grade="${gradeKey}">
+                <div class="grade-accordion-header" onclick="window.toggleGradeAccordion('${gradeKey}')">
+                    <div class="grade-accordion-title">
+                        <span style="font-size:11px; color:#a0aec0;">${caret}</span>
+                        <span>${gradeKey}학년 평가 항목 리스트</span>
+                        <span style="font-size: 12px; font-weight: normal; color: #718096; margin-left:2px;">(${visibleItems.length}개)</span>
+                        ${displayBadge}
+                    </div>
+                    <div class="grade-accordion-controls" onclick="event.stopPropagation()">
+                        <label style="font-size: 11px; font-weight: 600; color: #4a5568;">정렬 방식:</label>
+                        <select class="grade-sort-select" onchange="window.changeGradeSort('${gradeKey}', this.value)" style="padding: 3px 6px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 11px; font-weight: 500; background:#fff; cursor:pointer;">
+                            <option value="priority" ${activeSortStrategy === 'priority' ? 'selected' : ''}>우선순위순</option>
+                            <option value="alphabetical" ${activeSortStrategy === 'alphabetical' ? 'selected' : ''}>가나다순</option>
+                            <option value="latest" ${activeSortStrategy === 'latest' ? 'selected' : ''}>최신순</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grade-accordion-body grade-body-${gradeKey}" style="display: ${bodyToggleCss};">
+                    ${visibleItems.length === 0 ? `
+                        <div style="text-align: center; padding: 24px; color: #a0aec0; font-size: 13px;">
+                            ${isGradeTabPublic ? '조건에 일치하는 등록된 데이터가 없습니다.' : '⚠️ 현재 학년 전체 탭이 비공개 처리 상태입니다. 설정 메뉴를 확인하세요.'}
+                        </div>
+                    ` : visibleItems.map(sub => {
+                        const internalSecretTag = sub.isPublic === false ? '<span class="badge badge-private" style="margin-left:5px;">원격비공개</span>' : '';
+                        return `
+                            <div class="assessment-item" id="item-${sub.id}">
+                                <div class="assessment-header-row" onclick="window.toggleItemAccordion('${sub.id}')">
+                                    <h4 class="assessment-item-title">
+                                        📘 ${sub.title} ${internalSecretTag}
+                                    </h4>
+                                    <div style="display: flex; gap: 8px; align-items: center;" onclick="event.stopPropagation()">
+                                        ${isCurrentUserAdmin ? `
+                                            <button onclick="window.editAssessmentItem('${sub.id}')" style="padding:3px 6px; font-size:11px; background:#ecc94b; color:#fff; border:none; border-radius:4px; cursor:pointer;">수정</button>
+                                            <button onclick="window.deleteAssessmentItem('${sub.id}')" style="padding:3px 6px; font-size:11px; background:#e53e3e; color:#fff; border:none; border-radius:4px; cursor:pointer;">삭제</button>
+                                        ` : ''}
+                                        <span class="item-arrow-${sub.id}" style="font-size:11px; color:#cbd5e0;">▶</span>
+                                    </div>
+                                </div>
+                                <div class="assessment-item-body item-body-${sub.id}">
+                                    <div style="white-space: pre-wrap;">${sub.content || '기재된 텍스트가 비어 있습니다.'}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    mainViewTarget.innerHTML = combinedHtml;
+}
+
+// 🌟 [요구사항 3 & 4] 설정 영역 내의 학년별 트리 종속형 인터페이스 제어 뷰어
+function renderSettingsModalTree() {
+    const treeTarget = document.getElementById('settings-grade-hierarchy-container');
+    if (!treeTarget) return;
+
+    let treeHtml = '';
+
+    ['1', '2', '3'].forEach(gradeKey => {
+        const currentGradeMeta = gradeSettings[gradeKey] || { visible: true };
+        const itemsInGrade = subjects.filter(sub => sub.grade === gradeKey);
+
+        treeHtml += `
+            <div class="settings-grade-block">
+                <div class="settings-grade-header">
+                    <span>📍 ${gradeKey}학년 마스터 제어 탭</span>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px;">
+                        <input type="checkbox" class="setting-grade-visible" data-grade="${gradeKey}" ${currentGradeMeta.visible ? 'checked' : ''} onchange="window.onTreeMasterNodeToggle('${gradeKey}', this.checked)" style="width:15px; height:15px;">
+                        상위 탭 활성화
+                    </label>
+                </div>
+                <div class="settings-grade-items-box-${gradeKey}" style="opacity: ${currentGradeMeta.visible ? '1' : '0.45'}; transition: opacity 0.25s ease;">
+                    ${itemsInGrade.length === 0 ? `
+                        <div style="font-size: 12px; color: #a0aec0; text-align: center; padding: 8px;">본 학년에 소속된 교과가 없습니다.</div>
+                    ` : itemsInGrade.map(sub => {
+                        const subSetting = userSettings.find(s => s.id === sub.id) || { visible: true, priority: 1 };
+                        return `
+                            <div class="settings-item">
+                                <div class="settings-item-info">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="checkbox" class="setting-visible item-check-${gradeKey}" data-id="${sub.id}" ${subSetting.visible ? 'checked' : ''} ${currentGradeMeta.visible ? '' : 'disabled'} style="width:13px; height:13px;">
+                                        ${sub.isPublic === false ? '🚫 ' : ''}<strong>${sub.title}</strong>
+                                    </label>
+                                </div>
+                                <div class="settings-item-controls">
+                                    <span style="font-size: 11px; color: #718096;">내부 순위:</span>
+                                    <input type="number" class="setting-priority item-priority-${gradeKey}" data-id="${sub.id}" value="${subSetting.priority}" min="1" ${currentGradeMeta.visible ? '' : 'disabled'}>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    treeTarget.innerHTML = treeHtml;
+}
+
+// ==========================================
+// 🔗 전역 이벤트 링크 인터페이스 (안정적 가교 연동)
+// ==========================================
+window.toggleGradeAccordion = function(gradeKey) {
+    if (gradeSettings[gradeKey]) {
+        gradeSettings[gradeKey].expanded = !gradeSettings[gradeKey].expanded;
+        flushConfigToStorage();
+        renderList();
+    }
+};
+
+window.changeGradeSort = function(gradeKey, sortValue) {
+    if (gradeSettings[gradeKey]) {
+        gradeSettings[gradeKey].sort = sortValue;
+        flushConfigToStorage();
+        renderList();
+    }
+};
+
+window.onTreeMasterNodeToggle = function(gradeKey, isChecked) {
+    const targetBox = document.querySelector(`.settings-grade-items-box-${gradeKey}`);
+    if (targetBox) {
+        targetBox.style.opacity = isChecked ? '1' : '0.45';
+        targetBox.querySelectorAll('input').forEach(input => {
+            input.disabled = !isChecked;
+        });
+    }
+};
+
+window.toggleItemAccordion = function(docId) {
+    const bodyTarget = document.querySelector(`.item-body-${docId}`);
+    const arrowTarget = document.querySelector(`.item-arrow-${docId}`);
+    if (bodyTarget) {
+        const isCurrentActive = bodyTarget.classList.toggle('active');
+        if (arrowTarget) arrowTarget.innerText = isCurrentActive ? '▼' : '▶';
+    }
+};
+
+window.editAssessmentItem = function(docId) {
+    const object = subjects.find(sub => sub.id === docId);
+    if (!object) return;
+
+    editingId = docId;
+    document.getElementById('assessment-modal-title').innerText = '✏️ 평가 계획 항목 수정';
+    document.getElementById('assessment-form-grade').value = object.grade || '1';
+    document.getElementById('assessment-form-title').value = object.title || '';
+    document.getElementById('assessment-form-content').value = object.content || '';
+    document.getElementById('assessment-form-public').checked = object.isPublic !== false;
+
+    const targetModal = document.getElementById('assessment-form-modal');
+    if (targetModal) targetModal.style.display = 'flex';
+};
+
+window.deleteAssessmentItem = async function(docId) {
+    if (!confirm("해당 과목의 평가 계획 데이터를 제거하시겠습니까?")) return;
+    try {
+        await deleteDoc(doc(db, 'assessments', docId));
+    } catch (err) {
+        console.error("Firestore 삭제 예외 에러:", err);
+        alert("❌ 클라우드 파일 삭제 도중 거부되었습니다.");
+    }
+};
