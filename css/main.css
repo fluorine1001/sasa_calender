@@ -283,3 +283,46 @@ body, html { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; heigh
         box-sizing: border-box;
     }
 }
+
+/* ========================================================
+   ✨ [추가] 상/벌점 부과 사유 등 좌우 분할 UI를 강제로 위아래로 배치
+======================================================== */
+@media (max-width: 768px) {
+    /* 1. 상벌점 관리 화면의 좌우 그리드(penalty-grid)를 세로 1렬로 강제 변환 */
+    .penalty-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+
+    /* 2. 카드나 모달 안에서 가로로 쪼개진 폼들을 세로(column)로 꺾기 */
+    .card > div[style*="display"], 
+    .card > form,
+    .modal-content > div[style*="display"],
+    .modal-content > form,
+    .tab-content > div[style*="display"] {
+        display: flex !important;
+        flex-direction: column !important; 
+        align-items: stretch !important;
+        gap: 16px !important;
+    }
+
+    /* 3. 우측에 있던 사유 입력칸 등이 100% 가로폭을 차지하며 하단으로 내려오도록 비율 해제 */
+    .card > div[style*="display"] > div,
+    .card > form > div,
+    .modal-content > div[style*="display"] > div,
+    .modal-content > form > div {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: none !important; 
+        box-sizing: border-box !important;
+    }
+
+    /* 4. 벌점 부과 사유 등을 입력하는 텍스트 영역(textarea) 크기 최적화 */
+    textarea {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        min-height: 80px; /* 터치하기 편하게 높이 확보 */
+    }
+}
