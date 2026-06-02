@@ -1,3 +1,4 @@
+// js/rich-editor.js
 export class NoticeEditor {
     constructor(containerId, latexGuide, callbacks) {
         this.container = document.getElementById(containerId);
@@ -120,7 +121,6 @@ export class NoticeEditor {
     initQuill() {
         if (!window.Quill) return;
 
-        // 1. 에디터 인스턴스 초기화
         this.quill = new Quill('#new-notice-editor', {
             theme: 'snow',
             placeholder: '본문 내용 입력 (볼드, 색상, 수식 및 이미지/동영상 삽입 가능)',
@@ -137,18 +137,105 @@ export class NoticeEditor {
             }
         });
 
-        // 2. 💡 [오버라이드] Quill 기본 핸들러를 차단하고 커스텀 모달 UI 바인딩
         const toolbar = this.quill.getModule('toolbar');
         toolbar.addHandler('image', () => { this.openMediaModal('upload', 'image'); });
         toolbar.addHandler('video', () => { this.openMediaModal('upload', 'video'); });
     }
 
-    // 📌 모달 초기 세팅
+    // 📌 [버그 수정] 다중 인스턴스 충돌 방지를 위해 모달을 열 때마다 이벤트를 현재 객체(this)에 동기화
+    bindModalEvents() {
+        document.getElementById('tab-btn-file').onclick = () => this.switchTab('file');
+        document.getElementById('tab-btn-url').onclick = () => this.switchTab('url');
+        document.getElementById('media-modal-cancel').onclick = () => {
+            document.getElementById('quill-media-modal').style.display = 'none';
+        };
+
+        const wInput = document.getElementById('media-modal-width');
+        const hInput = document.getElementById('media-modal-height');
+        const lockBtn = document.getElementById('media-modal-lock');
+        const fileInput = document.getElementById('media-modal-file-input');
+        const modal = document.getElementById('quill-media-modal');
+
+        wInput.oninput = () => {
+            if (lockBtn.checked && wInput.value && this.modalState.ratio && !isNaN(wInput.value)) {
+                hInput.value = Math.round(wInput.value / this.modalState.ratio);
+            }
+        };
+        hInput.oninput = () => {
+            if (lockBtn.checked && hInput.value && this.modalState.ratio && !isNaN(hInput.value)) {
+                wInput.value = Math.round(hInput.value * this.modalState.ratio);
+            }
+        };
+
+        fileInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            this.modalState.file = file;
+            const fileUrl = URL.createObjectURL(file);
+
+            if (this.modalState.type === 'image') {
+                const img = new Image();
+                img.onload = () => {
+                    this.modalState.ratio = img.width / img.height;
+                    wInput.value = img.width; hInput.value = img.height;
+                    this.setInputDisabled(false);
+                    URL.revokeObjectURL(fileUrl);
+                };
+                img.src = fileUrl;
+            } else {
+                const video = document.createElement('video');
+                video.onloadedmetadata = () => {
+                    this.modalState.ratio = video.videoWidth / video.videoHeight;
+                    wInput.value = video.videoWidth; hInput.value = video.videoHeight;
+                    this.setInputDisabled(false);
+                    URL.revokeObjectURL(fileUrl);
+                };
+                video.src = fileUrl;
+            }
+        };
+
+        document.getElementById('media-modal-confirm').onclick = async () => {
+            if (this.modalState.mode === 'upload') {
+                if (this.modalState.source === 'file') {
+                    const reqWidth = wInput.value || (this.modalState.type === 'video' ? 640 : 400);
+                    const reqHeight = hInput.value || (this.modalState.type === 'video' ? 360 : 300);
+                    
+                    if (!this.modalState.file) return alert("업로드할 미디어 파일을 골라주세요.");
+                    modal.style.display = 'none';
+                    await this.executeUpload(this.modalState.file, reqWidth, reqHeight);
+                } else {
+                    const url = document.getElementById('media-modal-url-input').value.trim();
+                    if (!url) return alert("올바른 미디어 URL 주소를 입력해 주세요.");
+                    
+                    const reqWidth = this.modalState.type === 'video' ? 640 : 'auto';
+                    const reqHeight = this.modalState.type === 'video' ? 360 : 'auto';
+                    
+                    modal.style.display = 'none';
+                    this.insertIntoQuill(this.formatVideoUrl(url), reqWidth, reqHeight);
+                }
+            } else if (this.modalState.mode === 'edit' && this.modalState.targetNode) {
+                modal.style.display = 'none';
+                const node = this.modalState.targetNode;
+                const reqWidth = wInput.value;
+                const reqHeight = hInput.value;
+                
+                node.setAttribute('width', reqWidth);
+                node.setAttribute('height', reqHeight);
+                node.style.width = reqWidth + 'px';
+                node.style.height = reqHeight + 'px';
+            }
+        };
+    }
+
     openMediaModal(mode, type, targetNode = null, width = '', height = '') {
         this.modalState.mode = mode;
         this.modalState.type = type;
         this.modalState.targetNode = targetNode;
         this.modalState.file = null;
+
+        // 모달 열 때마다 현재 인스턴스에 맞게 이벤트 동기화 (업로드 버튼 먹통 버그 해결)
+        this.bindModalEvents();
 
         const modal = document.getElementById('quill-media-modal');
         const title = document.getElementById('media-modal-title');
@@ -186,7 +273,6 @@ export class NoticeEditor {
         modal.style.display = 'flex';
     }
 
-    // 📌 탭 변경 제어 로직
     switchTab(sourceType) {
         this.modalState.source = sourceType;
         const btnFile = document.getElementById('tab-btn-file');
@@ -231,94 +317,9 @@ export class NoticeEditor {
     }
 
     initEvents() {
-        const modal = document.getElementById('quill-media-modal');
         const contextMenu = document.getElementById('quill-media-context-menu');
-        const fileInput = document.getElementById('media-modal-file-input');
-        const wInput = document.getElementById('media-modal-width');
-        const hInput = document.getElementById('media-modal-height');
-        const lockBtn = document.getElementById('media-modal-lock');
 
-        // 탭 버튼 클릭 이벤트 바인딩
-        document.getElementById('tab-btn-file').onclick = () => this.switchTab('file');
-        document.getElementById('tab-btn-url').onclick = () => this.switchTab('url');
-
-        // 📌 파일 감지 및 비동기 메타데이터 스캔 (업로드 전 크기 자동 계산용)
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            this.modalState.file = file;
-            const fileUrl = URL.createObjectURL(file);
-
-            if (this.modalState.type === 'image') {
-                const img = new Image();
-                img.onload = () => {
-                    this.modalState.ratio = img.width / img.height;
-                    wInput.value = img.width; hInput.value = img.height;
-                    this.setInputDisabled(false);
-                    URL.revokeObjectURL(fileUrl);
-                };
-                img.src = fileUrl;
-            } else {
-                const video = document.createElement('video');
-                video.onloadedmetadata = () => {
-                    this.modalState.ratio = video.videoWidth / video.videoHeight;
-                    wInput.value = video.videoWidth; hInput.value = video.videoHeight;
-                    this.setInputDisabled(false);
-                    URL.revokeObjectURL(fileUrl);
-                };
-                video.src = fileUrl;
-            }
-        });
-
-        // 실시간 비율 계산 연동
-        wInput.oninput = () => {
-            if (lockBtn.checked && wInput.value && this.modalState.ratio && !isNaN(wInput.value)) {
-                hInput.value = Math.round(wInput.value / this.modalState.ratio);
-            }
-        };
-        hInput.oninput = () => {
-            if (lockBtn.checked && hInput.value && this.modalState.ratio && !isNaN(hInput.value)) {
-                wInput.value = Math.round(hInput.value * this.modalState.ratio);
-            }
-        };
-
-        document.getElementById('media-modal-cancel').onclick = () => modal.style.display = 'none';
-
-        // 📌 모달 최종 승인 확인 로직
-        document.getElementById('media-modal-confirm').onclick = async () => {
-            if (this.modalState.mode === 'upload') {
-                if (this.modalState.source === 'file') {
-                    const reqWidth = wInput.value || (this.modalState.type === 'video' ? 640 : 400);
-                    const reqHeight = hInput.value || (this.modalState.type === 'video' ? 360 : 300);
-                    
-                    if (!this.modalState.file) return alert("업로드할 미디어 파일을 골라주세요.");
-                    modal.style.display = 'none';
-                    await this.executeUpload(this.modalState.file, reqWidth, reqHeight);
-                } else {
-                    const url = document.getElementById('media-modal-url-input').value.trim();
-                    if (!url) return alert("올바른 미디어 URL 주소를 입력해 주세요.");
-                    
-                    const reqWidth = this.modalState.type === 'video' ? 640 : 'auto';
-                    const reqHeight = this.modalState.type === 'video' ? 360 : 'auto';
-                    
-                    modal.style.display = 'none';
-                    this.insertIntoQuill(this.formatVideoUrl(url), reqWidth, reqHeight);
-                }
-            } else if (this.modalState.mode === 'edit' && this.modalState.targetNode) {
-                modal.style.display = 'none';
-                const node = this.modalState.targetNode;
-                const reqWidth = wInput.value;
-                const reqHeight = hInput.value;
-                
-                node.setAttribute('width', reqWidth);
-                node.setAttribute('height', reqHeight);
-                node.style.width = reqWidth + 'px';
-                node.style.height = reqHeight + 'px';
-            }
-        };
-
-        // 🖱️ 업로드 후 우클릭 트리거 바인딩 (이미지 및 동영상 태그 전부 감지)
+        // 🖱️ 우클릭 트리거 바인딩
         const editorContent = this.container.querySelector('.ql-editor');
         editorContent.addEventListener('contextmenu', (e) => {
             if (['IMG', 'IFRAME', 'VIDEO'].includes(e.target.tagName)) {
@@ -344,7 +345,49 @@ export class NoticeEditor {
             if (!e.target.closest('#quill-media-context-menu')) contextMenu.style.display = 'none';
         });
 
-        // 제출 폼 관련 이벤트
+        // 💡 [새 기능] 복사+붙여넣기(Ctrl+V) 시 Base64 차단 및 자동 서버 업로드 처리 (1MB 에러 완벽 해결!)
+        this.quill.root.addEventListener('paste', async (e) => {
+            const clipboardData = e.clipboardData || window.clipboardData;
+            if (!clipboardData || !clipboardData.items) return;
+
+            for (let i = 0; i < clipboardData.items.length; i++) {
+                const item = clipboardData.items[i];
+                if (item.type.indexOf('image') !== -1) {
+                    e.preventDefault(); // 기본 붙여넣기(Base64 폭탄)를 강제로 막습니다.
+                    
+                    const file = item.getAsFile();
+                    if (!file) continue;
+
+                    const range = this.quill.getSelection(true) || { index: this.quill.getLength() };
+                    const placeholder = '[이미지 업로드 중...⏳]';
+                    this.quill.insertText(range.index, placeholder);
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('upload_preset', this.uploadPreset);
+
+                    try {
+                        const response = await fetch(this.cloudinaryUrl, { method: 'POST', body: formData });
+                        const result = await response.json();
+
+                        this.quill.deleteText(range.index, placeholder.length);
+
+                        if (result.secure_url) {
+                            this.modalState.type = 'image'; 
+                            this.insertIntoQuill(result.secure_url, 'auto', 'auto', range.index);
+                        } else {
+                            throw new Error('업로드 거부');
+                        }
+                    } catch (error) {
+                        console.error("Paste upload error:", error);
+                        this.quill.deleteText(range.index, placeholder.length);
+                        alert("붙여넣은 이미지 업로드에 실패했습니다.");
+                    }
+                }
+            }
+        });
+
+        // 제출 및 UI 이벤트
         this.container.querySelector('#btn-add-link-row').addEventListener('click', () => this.addLinkRow());
         this.container.querySelector('#link-inputs-container').addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-remove-link-row')) e.target.closest('.link-input-row').remove();
@@ -378,13 +421,12 @@ export class NoticeEditor {
             }
         });
 
-        // 📌 LaTeX 가이드 토글 이벤트 추가 (새로 추가된 부분!)
         const latexToggleBtn = this.container.querySelector('#latex-guide-toggle');
         const latexContent = this.container.querySelector('#latex-guide-content');
         const latexArrow = this.container.querySelector('#latex-guide-arrow');
 
         if (latexToggleBtn) {
-            latexContent.innerHTML = this.latexGuide; // 전달받은 가이드 내용 삽입
+            latexContent.innerHTML = this.latexGuide;
             latexToggleBtn.addEventListener('click', () => {
                 const isHidden = latexContent.style.display === 'none';
                 latexContent.style.display = isHidden ? 'block' : 'none';
@@ -393,10 +435,8 @@ export class NoticeEditor {
         }
     }
 
-    // 📌 비디오 주소 포맷 검증 및 자동재생 차단 제어 필터
     formatVideoUrl(url) {
         if (this.modalState.type !== 'video') return url;
-        
         const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
         if (ytMatch) {
             return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=0&controls=1&rel=0`;
@@ -406,7 +446,8 @@ export class NoticeEditor {
 
     async executeUpload(file, reqWidth, reqHeight) {
         const range = this.quill.getSelection() || { index: this.quill.getLength() };
-        this.quill.insertText(range.index, '[미디어 전송 중...⏳]');
+        const placeholder = '[미디어 전송 중...⏳]';
+        this.quill.insertText(range.index, placeholder);
         
         const formData = new FormData();
         formData.append('file', file);
@@ -417,19 +458,18 @@ export class NoticeEditor {
             const result = await response.json();
 
             if (result.secure_url) {
-                this.quill.deleteText(range.index, '[미디어 전송 중...⏳]'.length);
+                this.quill.deleteText(range.index, placeholder.length);
                 this.insertIntoQuill(result.secure_url, reqWidth, reqHeight, range.index);
             } else {
                 throw new Error('업로드 거부');
             }
         } catch (error) {
             console.error(error);
-            this.quill.deleteText(range.index, '[미디어 전송 중...⏳]'.length);
+            this.quill.deleteText(range.index, placeholder.length);
             alert("서버 업로드에 실패했습니다.");
         }
     }
 
-    // 📌 에디터 주입 및 커스텀 가로/세로 오버라이딩 (비디오 컨트롤러 및 URL auto 처리)
     insertIntoQuill(url, width, height, insertIndex = null) {
         const range = insertIndex !== null ? { index: insertIndex } : (this.quill.getSelection() || { index: this.quill.getLength() });
         const embedType = this.modalState.type; 
