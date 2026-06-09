@@ -118,3 +118,12 @@ body {
 .auth-links a:hover {
     text-decoration: underline;
 }
+
+/* 📱 모바일 반응형 (인증 화면) */
+@media (max-width: 480px) {
+    .auth-container {
+        width: 90%;
+        padding: 30px 20px;
+        margin: 0 auto;
+    }
+}

@@ -21,6 +21,14 @@ function initSasadomi() {
         if (user) {
             currentUid = user.uid;
             await checkSasaIntegrationStatus();
+            
+            // 💡 [수정됨] 새로고침 시에도 동일하게 로딩 메시지를 띄우기 위해 
+            // 직접 함수를 호출하지 않고 triggerSasaTabLoad()를 실행합니다.
+            const currentTab = localStorage.getItem('sasa_last_active_tab');
+            if (currentTab === 'sasadomi' && savedSasaId && savedSasaToken) {
+                console.log("[Sasadomi] 인증 완료. 지연된 데이터 크롤링을 시작합니다.");
+                window.triggerSasaTabLoad(); 
+            }
         } else {
             currentUid = null;
             savedSasaId = null;
@@ -219,7 +227,7 @@ async function loadSasadomiData() {
                 });
             }
 
-            if (penaltyListContainer) penaltyListContainer.innerHTML = listHtml || '<p style="text-align:center; color:#94a3b8; padding:20px; font-size:13px;">깨끗합니다! 부여된 상벌점 내역이 없습니다.</p>';
+            if (penaltyListContainer) penaltyListContainer.innerHTML = listHtml || '<p style="text-align:center; color:#94a3b8; padding:20px; font-size:13px;">부여된 상벌점 내역이 없습니다.</p>';
         } else {
             if (statusText) statusText.innerText = "데이터를 가져오지 못했습니다: " + data.message;
         }
@@ -306,7 +314,7 @@ async function loadApplicationData() {
                             <div style="color:#64748b; font-size:12px;">📍 ${item.place} ${item.teacher ? `(지도: ${item.teacher})` : ''}</div>
                             ${item.detail ? `<div style="color:#94a3b8; font-size:11px; margin-top:3px;">📝 사유: ${item.detail}</div>` : ''}
                             <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:6px;">
-                                <button onclick="window.deleteSasaApplication('study', '${item.id}')" style="background:#fee2e2; color:#991b1b; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">🗑️ 삭제/취소</button>
+                                <button onclick="window.deleteSasaApplication('study', '${item.id}')" style="background:#fee2e2; color:#991b1b; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">🗑️ 삭제</button>
                                 <div style="color:#cbd5e1; font-size:10px; text-align:right;">신청일시: ${item.applyDate}</div>
                             </div>
                         </div>
@@ -322,8 +330,8 @@ async function loadApplicationData() {
                     outContainer.innerHTML = data.outList.map(item => {
                         const isApproved = item.status.includes('승인');
                         const deleteBtnHtml = isApproved 
-                            ? `<span style="font-size:11px; color:#94a3b8; font-weight:600;">승인됨 (삭제불가)</span>`
-                            : `<button onclick="window.deleteSasaApplication('out', '${item.id}')" style="background:#fee2e2; color:#991b1b; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">🗑️ 삭제/취소</button>`;
+                            ? `<span style="font-size:11px; color:#94a3b8; font-weight:600;">승인</span>`
+                            : `<button onclick="window.deleteSasaApplication('out', '${item.id}')" style="background:#fee2e2; color:#991b1b; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">🗑️ 삭제</button>`;
 
                         return `
                         <div style="padding:10px 5px; border-bottom:1px solid #f1f5f9; font-size:13px;">
@@ -331,8 +339,8 @@ async function loadApplicationData() {
                                 <span style="font-weight:600; color:#334155;">[${item.type}] ${item.reason}</span>
                                 ${getStatusBadgeHtml(item.status)}
                             </div>
-                            <div style="color:#64748b; font-size:12px;">출발: <span style="color:#2563eb; font-weight:500;">${item.outDate}</span></div>
-                            <div style="color:#64748b; font-size:12px;">귀교: <span style="color:#e11d48; font-weight:500;">${item.inDate}</span></div>
+                            <div style="color:#64748b; font-size:12px;">외출: <span style="color:#2563eb; font-weight:500;">${item.outDate}</span></div>
+                            <div style="color:#64748b; font-size:12px;">귀사: <span style="color:#e11d48; font-weight:500;">${item.inDate}</span></div>
                             <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:6px;">
                                 ${deleteBtnHtml}
                                 <div style="color:#cbd5e1; font-size:10px; text-align:right;">신청일시: ${item.applyDate}</div>
@@ -352,7 +360,7 @@ async function loadApplicationData() {
 // 🗑️ 동적으로 렌더링된 삭제 버튼에서 호출할 전역 함수 바인딩
 window.deleteSasaApplication = async function(type, id) {
     if (!savedSasaId || !savedSasaToken) return alert("인증 정보가 없습니다.");
-    if (!confirm("정말로 이 신청 내역을 삭제/취소하시겠습니까?")) return;
+    if (!confirm("정말로 이 신청 내역을 삭제하시겠습니까?")) return;
 
     try {
         const response = await fetch(`${API_BASE_URL}/v1/applications/${type}/${id}`, {
@@ -364,7 +372,7 @@ window.deleteSasaApplication = async function(type, id) {
         const data = await response.json();
         
         if (data.success) {
-            alert("✅ 정상적으로 취소 및 삭제되었습니다.");
+            alert("✅ 정상적으로 삭제되었습니다.");
             // 💡 삭제 성공 후 자동으로 목록 새로고침 (await 추가)
             await loadApplicationData(); 
         } else {
@@ -422,7 +430,7 @@ function setupApplicationButtons() {
 
             btnToggleStudy.innerText = "⏳ 옵션 로딩 중...";
             const meta = await fetchSasaMetaOptions();
-            btnToggleStudy.innerText = "자습 신청 대행";
+            btnToggleStudy.innerText = "신청";
             if (!meta) return;
 
             const today = new Date().toLocaleDateString('en-CA'); 
@@ -431,17 +439,17 @@ function setupApplicationButtons() {
                 <div class="cl-modal-box" style="width:400px; background:#fff; border-radius:12px; overflow:hidden;">
                     <div class="cl-modal-header" style="background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:15px 20px;">
                         <h3 style="margin:0; font-size:16px; color:#1e293b; display:flex; justify-content:space-between; align-items:center;">
-                            🌙 야간 자율학습 신청
+                            🌙 자율학습 신청
                             <button class="cl-modal-close" onclick="document.getElementById('sasa-dynamic-modal').style.display='none'" style="background:none; border:none; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
                         </h3>
                     </div>
                     <form id="study-apply-form" style="padding:20px; display:flex; flex-direction:column; gap:15px;">
                         <div>
-                            <label style="font-size:13px; font-weight:600; color:#475569; display:block; margin-bottom:5px;">신청 날짜</label>
+                            <label style="font-size:13px; font-weight:600; color:#475569; display:block; margin-bottom:5px;">날짜</label>
                             <input type="date" id="study-date" value="${today}" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
                         </div>
                         <div>
-                            <label style="font-size:13px; font-weight:600; color:#475569; display:block; margin-bottom:5px;">교시 선택</label>
+                            <label style="font-size:13px; font-weight:600; color:#475569; display:block; margin-bottom:5px;">시간</label>
                             <select id="study-time" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
                                 ${meta.studyTimes.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}
                             </select>
@@ -453,7 +461,7 @@ function setupApplicationButtons() {
                             </select>
                         </div>
                         <div id="teacher-wrapper" style="display:none; background:#fef2f2; padding:10px; border-radius:6px; border:1px solid #fecaca;">
-                            <label style="font-size:13px; font-weight:600; color:#b91c1c; display:block; margin-bottom:5px;">지도 교사 (본관 신청시 필수)</label>
+                            <label style="font-size:13px; font-weight:600; color:#b91c1c; display:block; margin-bottom:5px;">지도 교사</label>
                             <select id="study-teacher" style="width:100%; padding:10px; border:1px solid #fca5a5; border-radius:6px; box-sizing:border-box;">
                                 <option value="">선택하세요</option>
                                 ${meta.teachers.map(t => `<option value="${t}">${t}</option>`).join('')}
@@ -463,7 +471,7 @@ function setupApplicationButtons() {
                             <label style="font-size:13px; font-weight:600; color:#475569; display:block; margin-bottom:5px;">기타 사유</label>
                             <input type="text" id="study-reason" placeholder="필요시 작성" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
                         </div>
-                        <button type="submit" class="cl-btn-primary" style="margin-top:5px; background:#3b82f6; color:white; padding:12px; border-radius:6px; font-weight:bold; border:none; cursor:pointer;">신청 제출하기</button>
+                        <button type="submit" class="cl-btn-primary" style="margin-top:5px; background:#3b82f6; color:white; padding:12px; border-radius:6px; font-weight:bold; border:none; cursor:pointer;">신청</button>
                     </form>
                 </div>
             `;
@@ -526,7 +534,7 @@ function setupApplicationButtons() {
 
             btnApplyOuting.innerText = "⏳ 옵션 로딩 중...";
             const meta = await fetchSasaMetaOptions();
-            btnApplyOuting.innerText = "외출 신청 작성";
+            btnApplyOuting.innerText = "신청";
             if (!meta) return;
 
             const today = new Date().toLocaleDateString('en-CA'); 
@@ -542,7 +550,7 @@ function setupApplicationButtons() {
                     <form id="outing-apply-form" style="padding:20px; display:flex; flex-direction:column; gap:15px;">
                         <div style="display:flex; gap:10px;">
                             <div style="flex:1;">
-                                <label style="font-size:13px; font-weight:600; color:#475569; display:block; margin-bottom:5px;">종류</label>
+                                <label style="font-size:13px; font-weight:600; color:#475569; display:block; margin-bottom:5px;">구분</label>
                                 <select id="out-type" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
                                     <option value="1">외출</option>
                                     <option value="2">외박</option>
@@ -550,12 +558,12 @@ function setupApplicationButtons() {
                             </div>
                             <div style="flex:2;">
                                 <label style="font-size:13px; font-weight:600; color:#475569; display:block; margin-bottom:5px;">사유</label>
-                                <input type="text" id="out-reason" required placeholder="예: 병원 진료" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                                <input type="text" id="out-reason" required placeholder="사유 작성" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
                             </div>
                         </div>
                         
                         <div style="background:#f1f5f9; padding:15px; border-radius:8px; border:1px solid #e2e8f0;">
-                            <label style="font-size:13px; font-weight:bold; color:#0f172a; display:block; margin-bottom:8px;">출발 (나가는 시간)</label>
+                            <label style="font-size:13px; font-weight:bold; color:#0f172a; display:block; margin-bottom:8px;">출발</label>
                             <div style="display:flex; gap:8px;">
                                 <input type="date" id="out-start-date" value="${today}" required style="flex:2; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
                                 <select id="out-start-time" required style="flex:1; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
@@ -565,7 +573,7 @@ function setupApplicationButtons() {
                         </div>
 
                         <div style="background:#fff1f2; padding:15px; border-radius:8px; border:1px solid #ffe4e6;">
-                            <label style="font-size:13px; font-weight:bold; color:#be123c; display:block; margin-bottom:8px;">귀교 (돌아오는 시간)</label>
+                            <label style="font-size:13px; font-weight:bold; color:#be123c; display:block; margin-bottom:8px;">귀사</label>
                             <div style="display:flex; gap:8px;">
                                 <input type="date" id="out-end-date" value="${today}" required style="flex:2; padding:8px; border:1px solid #fecdd3; border-radius:6px; box-sizing:border-box;">
                                 <select id="out-end-time" required style="flex:1; padding:8px; border:1px solid #fecdd3; border-radius:6px; box-sizing:border-box;">
@@ -573,8 +581,7 @@ function setupApplicationButtons() {
                                 </select>
                             </div>
                         </div>
-
-                        <button type="submit" class="cl-btn-primary" style="margin-top:5px; background:#e11d48; color:white; padding:12px; border-radius:6px; font-weight:bold; border:none; cursor:pointer;">결재 상신하기</button>
+                        <button type="submit" class="cl-btn-primary" style="margin-top:5px; background:#3b82f6; color:white; padding:12px; border-radius:6px; font-weight:bold; border:none; cursor:pointer;">신청</button>
                     </form>
                 </div>
             `;
@@ -588,7 +595,7 @@ function setupApplicationButtons() {
                 const bdateUnix = getUnixTimestampSeconds(document.getElementById('out-start-date').value, document.getElementById('out-start-time').value);
                 const edateUnix = getUnixTimestampSeconds(document.getElementById('out-end-date').value, document.getElementById('out-end-time').value);
 
-                if (bdateUnix >= edateUnix) return alert("귀교 시간이 출발 시간보다 빠르거나 같을 수 없습니다.");
+                if (bdateUnix >= edateUnix) return alert("귀사 시간이 출발 시간보다 빠르거나 같을 수 없습니다.");
                 
                 const submitBtn = e.target.querySelector('button[type="submit"]');
                 const originalBtnText = submitBtn.innerText;
@@ -627,14 +634,37 @@ function setupApplicationButtons() {
 // ==========================================
 // 🔗 [전역 바인딩] app.js 의 탭 체인저와 가교 연결
 // ==========================================
-window.triggerSasaTabLoad = function() {
+window.triggerSasaTabLoad = async function() {
     console.log("[Hook] 사사도미 탭 진입 감지됨. 데이터 스크래핑 런타임 시작.");
-    checkSasaIntegrationStatus().then(() => {
+    
+    // 1. 아직 Firebase 인증이 안 끝났다면 에러를 내지 않고 대기시킵니다.
+    // (인증이 끝나면 onAuthStateChanged가 알아서 이 함수를 다시 호출해 줍니다)
+    if (!currentUid) {
+        console.log("[Hook] Firebase 인증 대기 중...");
+        return; 
+    }
+
+    const loadingMsg = document.getElementById('sasa-loading-msg');
+    
+    // 2. 로딩 메시지 띄우기
+    if (loadingMsg) loadingMsg.style.display = 'block';
+
+    try {
+        await checkSasaIntegrationStatus();
+        
         if (savedSasaId && savedSasaToken) {
-            loadSasadomiData();      
-            loadApplicationData();   
+            // 3. 데이터를 모두 불러올 때까지 대기
+            await Promise.all([
+                loadSasadomiData(),      
+                loadApplicationData()
+            ]);
         }
-    });
+    } catch (error) {
+        console.error("[Sasadomi] 데이터 로딩 중 오류 발생:", error);
+    } finally {
+        // 4. 데이터를 다 불러왔거나 오류가 났어도 로딩 메시지 숨기기
+        if (loadingMsg) loadingMsg.style.display = 'none';
+    }
 };
 
 document.addEventListener('DOMContentLoaded', initSasadomi);
