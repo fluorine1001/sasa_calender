@@ -154,7 +154,8 @@ async function renderMonthView(calendarGridContainer, todayEventsList) {
             dayCell.classList.add('selected');
         }
 
-        const tasksForDay = tasks.filter(task => task.dueDate === dateStr);
+        // 💡 시간 정보(T...)가 포함되어 있어도 날짜가 일치하면 표시되도록 startsWith 사용
+        const tasksForDay = tasks.filter(task => task.dueDate && task.dueDate.startsWith(dateStr));
         if (tasksForDay.length > 0) {
             const eventCount = document.createElement('span');
             eventCount.className = 'event-count';
@@ -206,7 +207,8 @@ async function renderWeekView(calendarGridContainer, selectedDayEventsList) {
         `;
 
         const eventsContainer = dayCol.querySelector('.week-events-container');
-        const tasksForDay = tasks.filter(t => t.dueDate === dateStr);
+        // 💡 주간 뷰에서도 동일하게 날짜 부분만 비교하도록 수정
+        const tasksForDay = tasks.filter(t => t.dueDate && t.dueDate.startsWith(dateStr));
         
         tasksForDay.forEach(task => {
             const div = document.createElement('div');
@@ -371,7 +373,8 @@ async function fetchTasksInRange(startDate, endDate) {
     const q = query(
         tasksRef,
         where('dueDate', '>=', startDate),
-        where('dueDate', '<=', endDate)
+        // 💡 종료 날짜의 가장 마지막 시간(T23:59)까지 포함되도록 쿼리 범위 확장
+        where('dueDate', '<=', endDate + 'T23:59')
     );
     try {
         const querySnapshot = await getDocs(q);

@@ -17,6 +17,10 @@ function initClassroom() {
     const unlinkBtn = document.getElementById('btn-unlink-classroom');
     const fetchBtn = document.getElementById('classroom-import-btn'); // 가져오기 버튼
 
+    // 동적으로 생성된 버튼에서 호출할 수 있도록 전역 바인딩
+    window.handleLinkClassroom = handleLinkClassroom;
+    window.loadCourses = loadCourses;
+
     // 클릭 이벤트 바인딩
     if (linkBtn) {
         console.log("[Classroom] 연동 버튼 감지됨, 리스너 연결 완료.");
@@ -142,8 +146,10 @@ async function checkLinkStatus() {
         const docSnap = await getDoc(tokenRef);
 
         if (docSnap.exists()) {
-            // 연동 기록이 존재함
-            updateUI(true);
+            const data = docSnap.data();
+            // 토큰이 존재하고 만료되지 않았는지 확인 (현재 시간 < 만료 예정 시간)
+            const isValid = data.access_token && (Date.now() < (data.expires_at || 0));
+            updateUI(isValid);
         } else {
             // 연동 기록이 없음
             updateUI(false);
@@ -227,10 +233,30 @@ async function loadCourses() {
             return;
         }
 
-        const accessToken = docSnap.data().access_token;
+        const { access_token, expires_at } = docSnap.data();
+
+        // 💡 1. 호출 전 만료 여부 확인
+        if (Date.now() >= (expires_at || 0)) {
+            modalBody.innerHTML = `
+                <p style="color:#d93025;">인증 세션이 만료되었습니다. 다시 연동이 필요합니다.</p>
+                <button class="cl-btn-primary" onclick="handleLinkClassroom()" style="width:100%; margin-top:10px;">다시 연동하기</button>
+            `;
+            return;
+        }
+
         const response = await fetch('https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
+            headers: { 'Authorization': `Bearer ${access_token}` }
         });
+
+        // 💡 2. 401 Unauthorized 에러 처리
+        if (response.status === 401) {
+            modalBody.innerHTML = `
+                <p style="color:#d93025;">인증 정보가 유효하지 않습니다. 다시 연동해주세요.</p>
+                <button class="cl-btn-primary" onclick="handleLinkClassroom()" style="width:100%; margin-top:10px;">다시 연동하기</button>
+            `;
+            return;
+        }
+
         const data = await response.json();
 
         if (!data.courses || data.courses.length === 0) {
@@ -249,7 +275,7 @@ async function loadCourses() {
                 <span class="cl-course-name">${course.name}</span>
                 <span class="cl-arrow">❯</span>
             `;
-            item.onclick = () => loadAssignments(course.id, course.name, accessToken);
+            item.onclick = () => loadAssignments(course.id, course.name, access_token);
             listContainer.appendChild(item);
         });
 
