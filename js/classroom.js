@@ -299,7 +299,8 @@ async function loadAssignments(courseId, courseName, token) {
         const data = await response.json();
 
         if (!data.courseWork || data.courseWork.length === 0) {
-            modalBody.innerHTML = '<p>이 수업에는 등록된 과제가 없습니다.</p><button class="cl-btn-primary" onclick="loadCourses()">뒤로 가기</button>';
+            modalBody.innerHTML = '<p>이 수업에는 등록된 과제가 없습니다.</p><button class="cl-btn-primary" id="btn-back-empty">뒤로 가기</button>';
+            document.getElementById('btn-back-empty').onclick = loadCourses;
             return;
         }
 
